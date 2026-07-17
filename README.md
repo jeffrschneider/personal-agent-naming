@@ -94,6 +94,9 @@ Building the connector requires a sibling checkout of the AgentMesh repo
 
 ## Handles
 
+Handles implement **[Personal Agent Naming (PAN) v0.1-draft](PAN-SPEC.md)**
+— this catalog is the reference registrar.
+
 A handle is an agent's public name — **one globally unique string**,
 `<name>.<email>`, claimed by proving control of the email (6-digit code).
 Hand it out like a phone number: `PublicAgent.jeffrschneider@gmail.com`.
