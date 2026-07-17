@@ -1,19 +1,12 @@
-// Agent Catalog UI. Plain JS against the catalog's own JSON API — the same
-// API any other consumer gets. State lives in the URL where it matters
-// (specialty filter is shareable); everything re-renders from fetch.
+// Agent Catalog UI. Two surfaces: lookup (default: a handle in, a card
+// out) and my-handles (claim/pair/release). The old browse grid survives
+// unlinked at /browse. Plain JS against the same JSON API anyone else gets.
 
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const grid = $("grid"), empty = $("empty"), drawer = $("drawer"), scrim = $("drawer-scrim");
-
-const state = {
-  q: "",
-  liveOnly: false,
-  source: "",
-  protocol: "",
-  specialty: new URLSearchParams(location.search).get("specialty") || "",
-};
+const IS_BROWSE = location.pathname.startsWith("/browse");
+const params = new URLSearchParams(location.search);
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
@@ -29,6 +22,20 @@ function ago(iso) {
   return `${Math.round(s / 86400)}d ago`;
 }
 
+function copyText(t, el) {
+  navigator.clipboard.writeText(t).then(() => {
+    const prev = el.textContent;
+    el.textContent = "Copied";
+    setTimeout(() => { el.textContent = prev; }, 1200);
+  }).catch((e) => console.log("[catalog:ui] copy failed", e));
+}
+
+function presencePill(p) {
+  const st = p || "unknown";
+  const label = st === "unknown" ? "no signal" : st;
+  return `<span class="pill presence ${esc(st)}"><span class="dot"></span>${esc(label)}</span>`;
+}
+
 // ── tally ─────────────────────────────────────────────────────────────────
 async function refreshStats() {
   try {
@@ -41,7 +48,135 @@ async function refreshStats() {
   }
 }
 
-// ── search ────────────────────────────────────────────────────────────────
+// ── shared detail builder (lookup card + browse drawer) ───────────────────
+function buildDetailHTML(l, probes, opts) {
+  const m = l.manifest || {};
+  const skills = (m.skills || []).map((s) => `
+    <div class="d-skill">
+      <div class="sk-name">${esc(s.name || s.id)}</div>
+      <div class="sk-desc">${esc(s.description || "")}</div>
+    </div>`).join("") || `<div class="muted">No skills declared.</div>`;
+
+  const probeRows = (probes || []).map((p) => `
+    <div class="probe-row">
+      <span class="${p.ok ? "probe-ok" : "probe-bad"}">${p.ok ? "✓ responded" : "✗ failed"}</span>
+      ${p.latency_ms != null ? `<span class="mono">${p.latency_ms}ms</span>` : ""}
+      <span class="muted">${ago(p.at) || ""}</span>
+      ${p.detail ? `<span class="muted">${esc(p.detail)}</span>` : ""}
+    </div>`).join("");
+
+  const node = m.node ? `
+    <dl class="kv">
+      <dt>node</dt><dd class="mono">${esc(m.node.id || "")}</dd>
+      ${m.node.profile ? `<dt>platform</dt><dd>${esc(m.node.profile.platform || "—")}${m.node.profile.client ? " · " + esc(m.node.profile.client) : ""}</dd>` : ""}
+      <dt>vouch</dt><dd>${m.node.attestation ? "node-signed attestation" : "—"}</dd>
+    </dl>` : `<div class="muted">Not node-hosted (${esc(l.source)} listing).</div>`;
+
+  const manifestBlock = opts && opts.collapseManifest
+    ? `<details class="manifest"><summary>Show verbatim manifest</summary>
+         <pre class="manifest-json" style="margin-top:.6rem">${esc(JSON.stringify(m, null, 2))}</pre>
+       </details>`
+    : `<pre class="manifest-json">${esc(JSON.stringify(m, null, 2))}</pre>`;
+
+  return `
+    <div class="d-head">
+      <h2>${esc(l.name)}</h2>
+      ${opts && opts.closeBtn ? `<button class="d-close" id="d-close" aria-label="Close">✕</button>` : ""}
+    </div>
+    <div class="d-sub">${presencePill(l.presence)}
+      ${l.presence !== "online" && l.last_seen_at ? `<span class="muted"> last seen ${ago(l.last_seen_at)}</span>` : ""}
+    </div>
+    <div>${esc(l.description || "")}</div>
+    ${l.handle ? `
+    <div class="d-section"><h3>Handle</h3>
+      <span class="handle-chip js-copy-handle" data-handle="${esc(l.handle)}" title="Copy handle">${esc(l.handle)}</span>
+    </div>` : ""}
+    <div class="d-section"><h3>Verification</h3>
+      ${probeRows || `<div class="muted">No probe checks yet. Claims below are as asserted by the source.</div>`}
+    </div>
+    <div class="d-section"><h3>Skills</h3>${skills}</div>
+    <div class="d-section"><h3>Hosting</h3>${node}</div>
+    <div class="d-section"><h3>Identity</h3>
+      <dl class="kv">
+        <dt>source</dt><dd>${esc(l.source)}</dd>
+        <dt>id</dt><dd class="mono">${esc(l.source_id)}</dd>
+        <dt>protocol</dt><dd>${esc(l.protocol)}</dd>
+        ${l.trust ? `<dt>trust</dt><dd>${esc(l.trust)}</dd>` : ""}
+        <dt>first indexed</dt><dd>${new Date(l.created_at).toLocaleString()}</dd>
+      </dl>
+    </div>
+    <div class="d-section"><h3>Manifest</h3>${manifestBlock}</div>`;
+}
+
+function wireCopyChips(root) {
+  for (const el of root.querySelectorAll(".js-copy-handle")) {
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      copyText(el.dataset.handle, el);
+    });
+  }
+}
+
+// ── lookup view ───────────────────────────────────────────────────────────
+async function lookup(handle) {
+  const msg = $("lk-msg"), card = $("lk-card");
+  msg.classList.remove("err");
+  msg.textContent = "Resolving…";
+  card.hidden = true;
+  let r;
+  try {
+    r = await fetch("/api/resolve?handle=" + encodeURIComponent(handle));
+  } catch (e) {
+    msg.textContent = "The registrar didn't answer. Try again.";
+    msg.classList.add("err");
+    return;
+  }
+  if (!r.ok) {
+    msg.textContent = "No agent by that name.";
+    msg.classList.add("err");
+    return;
+  }
+  const d = await r.json();
+  const c = d.card || {};
+  if (!d.listing) {
+    msg.innerHTML = `<b class="mono">${esc(c.handle || handle)}</b> is claimed but has no agent attached yet.`;
+    return;
+  }
+  msg.textContent = "";
+  // The share link is the handle, not an internal id.
+  const url = new URL(location);
+  url.searchParams.set("h", c.handle || handle);
+  history.replaceState(null, "", url);
+  card.innerHTML =
+    `<div class="lk-bind muted" style="font-size:.78rem; margin-bottom:.8rem">
+       anchor: <b>${esc(c.anchor || "email")}</b> · binding: <b>${esc(c.binding || "none")}</b>
+       ${c.stale ? ` · <span style="color:#f59e0b">record stale</span>` : ""}
+     </div>` +
+    buildDetailHTML(d.listing, d.probes || [], { collapseManifest: true });
+  card.hidden = false;
+  wireCopyChips(card);
+}
+
+if (!IS_BROWSE) {
+  $("view-lookup").hidden = false;
+  $("lk-btn").addEventListener("click", () => {
+    const h = $("lk-input").value.trim();
+    if (h) lookup(h);
+  });
+  $("lk-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { const h = $("lk-input").value.trim(); if (h) lookup(h); }
+  });
+  const deepHandle = params.get("h");
+  if (deepHandle) {
+    $("lk-input").value = deepHandle;
+    lookup(deepHandle);
+  }
+}
+
+// ── browse view (/browse only: the retired shelf, kept unlinked) ──────────
+const state = { q: "", liveOnly: false, source: "", protocol: "", specialty: params.get("specialty") || "" };
+const grid = $("grid"), empty = $("empty"), drawer = $("drawer"), scrim = $("drawer-scrim");
+
 function query() {
   const p = new URLSearchParams();
   if (state.q) p.set("q", state.q);
@@ -53,8 +188,8 @@ function query() {
 }
 
 async function refresh() {
+  if (!IS_BROWSE) return;
   try {
-    // A query containing '@' is a handle — exact-string lookup, no parsing.
     if (state.q.includes("@")) {
       const r = await fetch("/api/resolve?handle=" + encodeURIComponent(state.q));
       if (r.ok) {
@@ -79,48 +214,6 @@ async function refresh() {
   }
 }
 
-function copyText(t, el) {
-  navigator.clipboard.writeText(t).then(() => {
-    const prev = el.textContent;
-    el.textContent = "Copied";
-    setTimeout(() => { el.textContent = prev; }, 1200);
-  }).catch((e) => console.log("[catalog:ui] copy failed", e));
-}
-
-function render(listings) {
-  renderFilterPills();
-  grid.innerHTML = listings.map(card).join("");
-  const filtered = state.q || state.liveOnly || state.source || state.protocol || state.specialty;
-  empty.hidden = listings.length > 0;
-  if (listings.length === 0) {
-    empty.innerHTML = filtered
-      ? "No agents match. Clear a filter or search for something broader."
-      : "The shelf is empty. Connect a mesh (<code>MESH_NATS_URL</code>) or submit a listing to <code>POST /api/listings</code>.";
-  }
-  for (const el of grid.querySelectorAll(".agent-card")) {
-    el.addEventListener("click", () => openDrawer(el.dataset.id));
-  }
-  for (const el of grid.querySelectorAll(".skill-chip")) {
-    el.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      state.specialty = el.dataset.claim;
-      refresh();
-    });
-  }
-  for (const el of grid.querySelectorAll(".handle-chip")) {
-    el.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      copyText(el.dataset.handle, el);
-    });
-  }
-}
-
-function presencePill(p) {
-  const st = p || "unknown";
-  const label = st === "unknown" ? "no signal" : st;
-  return `<span class="pill presence ${esc(st)}"><span class="dot"></span>${esc(label)}</span>`;
-}
-
 function card(l) {
   const st = l.presence || "unknown";
   const chips = (l.specialties || []).slice(0, 5).map((s) =>
@@ -129,7 +222,7 @@ function card(l) {
   const seen = st !== "online" && l.last_seen_at ? `<span>last seen ${ago(l.last_seen_at)}</span>` : "";
   const trust = l.trust ? `<span class="seal ${l.trust === "verified" ? "good" : ""}">${esc(l.trust)}</span>` : "";
   const handle = l.handle
-    ? `<div><span class="handle-chip" data-handle="${esc(l.handle)}" title="Copy handle">${esc(l.handle)}</span></div>`
+    ? `<div><span class="handle-chip js-copy-handle" data-handle="${esc(l.handle)}" title="Copy handle">${esc(l.handle)}</span></div>`
     : "";
   return `
   <article class="agent-card ${esc(st)}" data-id="${esc(l.id)}" tabindex="0" role="button">
@@ -160,7 +253,29 @@ function renderFilterPills() {
   }
 }
 
-// ── detail drawer ─────────────────────────────────────────────────────────
+function render(listings) {
+  renderFilterPills();
+  grid.innerHTML = listings.map(card).join("");
+  const filtered = state.q || state.liveOnly || state.source || state.protocol || state.specialty;
+  empty.hidden = listings.length > 0;
+  if (listings.length === 0) {
+    empty.innerHTML = filtered
+      ? "No agents match. Clear a filter or search for something broader."
+      : "Nothing indexed yet.";
+  }
+  for (const el of grid.querySelectorAll(".agent-card")) {
+    el.addEventListener("click", () => openDrawer(el.dataset.id));
+  }
+  for (const el of grid.querySelectorAll(".skill-chip")) {
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      state.specialty = el.dataset.claim;
+      refresh();
+    });
+  }
+  wireCopyChips(grid);
+}
+
 async function openDrawer(id) {
   let d;
   try {
@@ -169,69 +284,11 @@ async function openDrawer(id) {
     console.log("[catalog:ui] detail fetch failed", e);
     return;
   }
-  const l = d.listing, m = l.manifest || {};
-  const skills = (m.skills || []).map((s) => `
-    <div class="d-skill">
-      <div class="sk-name">${esc(s.name || s.id)}</div>
-      <div class="sk-desc">${esc(s.description || "")}</div>
-    </div>`).join("") || `<div class="muted">No skills declared.</div>`;
-
-  const probes = (d.probes || []).map((p) => `
-    <div class="probe-row">
-      <span class="${p.ok ? "probe-ok" : "probe-bad"}">${p.ok ? "✓ responded" : "✗ failed"}</span>
-      ${p.latency_ms != null ? `<span class="mono">${p.latency_ms}ms</span>` : ""}
-      <span class="muted">${ago(p.at) || ""}</span>
-      ${p.detail ? `<span class="muted">${esc(p.detail)}</span>` : ""}
-    </div>`).join("");
-
-  const node = m.node ? `
-    <dl class="kv">
-      <dt>node</dt><dd class="mono">${esc(m.node.id || "")}</dd>
-      ${m.node.profile ? `<dt>platform</dt><dd>${esc(m.node.profile.platform || "—")}${m.node.profile.client ? " · " + esc(m.node.profile.client) : ""}</dd>` : ""}
-      <dt>vouch</dt><dd>${m.node.attestation ? "node-signed attestation" : "—"}</dd>
-    </dl>` : `<div class="muted">Not node-hosted (${esc(l.source)} listing).</div>`;
-
-  drawer.innerHTML = `
-    <div class="d-head">
-      <h2>${esc(l.name)}</h2>
-      <button class="d-close" id="d-close" aria-label="Close">✕</button>
-    </div>
-    <div class="d-sub">${presencePill(l.presence)}
-      ${l.presence !== "online" && l.last_seen_at ? `<span class="muted"> last seen ${ago(l.last_seen_at)}</span>` : ""}
-    </div>
-    <div>${esc(l.description || "")}</div>
-    ${l.handle ? `
-    <div class="d-section"><h3>Handle</h3>
-      <span class="handle-chip" id="d-handle" data-handle="${esc(l.handle)}" title="Copy handle">${esc(l.handle)}</span>
-    </div>` : ""}
-
-    <div class="d-section"><h3>Verification</h3>
-      ${probes || `<div class="muted">No probe checks yet — claims below are as asserted by the source.</div>`}
-    </div>
-
-    <div class="d-section"><h3>Skills</h3>${skills}</div>
-
-    <div class="d-section"><h3>Hosting</h3>${node}</div>
-
-    <div class="d-section"><h3>Identity</h3>
-      <dl class="kv">
-        <dt>source</dt><dd>${esc(l.source)}</dd>
-        <dt>id</dt><dd class="mono">${esc(l.source_id)}</dd>
-        <dt>protocol</dt><dd>${esc(l.protocol)}</dd>
-        ${l.trust ? `<dt>trust</dt><dd>${esc(l.trust)}</dd>` : ""}
-        <dt>first indexed</dt><dd>${new Date(l.created_at).toLocaleString()}</dd>
-      </dl>
-    </div>
-
-    <div class="d-section"><h3>Manifest</h3>
-      <pre class="manifest-json">${esc(JSON.stringify(m, null, 2))}</pre>
-    </div>`;
+  drawer.innerHTML = buildDetailHTML(d.listing, d.probes || [], { closeBtn: true });
   drawer.hidden = false;
   scrim.hidden = false;
   $("d-close").addEventListener("click", closeDrawer);
-  const dh = $("d-handle");
-  if (dh) dh.addEventListener("click", () => copyText(dh.dataset.handle, dh));
-  // Listing pages are shareable: ?open=<id> deep-links straight to this drawer.
+  wireCopyChips(drawer);
   const url = new URL(location);
   url.searchParams.set("open", id);
   history.replaceState(null, "", url);
@@ -245,27 +302,31 @@ function closeDrawer() {
   history.replaceState(null, "", url);
 }
 scrim.addEventListener("click", closeDrawer);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeDrawer(); closeClaim(); }
-});
 
-// ── wiring ────────────────────────────────────────────────────────────────
-let debounce;
-$("q").addEventListener("input", (e) => {
-  clearTimeout(debounce);
-  debounce = setTimeout(() => { state.q = e.target.value.trim(); refresh(); }, 250);
-});
-$("live-toggle").addEventListener("click", (e) => {
-  state.liveOnly = !state.liveOnly;
-  e.currentTarget.setAttribute("aria-pressed", String(state.liveOnly));
+if (IS_BROWSE) {
+  $("view-lookup").hidden = true;
+  $("view-browse").hidden = false;
+  let debounce;
+  $("q").addEventListener("input", (e) => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => { state.q = e.target.value.trim(); refresh(); }, 250);
+  });
+  $("live-toggle").addEventListener("click", (e) => {
+    state.liveOnly = !state.liveOnly;
+    e.currentTarget.setAttribute("aria-pressed", String(state.liveOnly));
+    refresh();
+  });
+  $("source").addEventListener("change", (e) => { state.source = e.target.value; refresh(); });
+  $("protocol").addEventListener("change", (e) => { state.protocol = e.target.value; refresh(); });
   refresh();
-});
-$("source").addEventListener("change", (e) => { state.source = e.target.value; refresh(); });
-$("protocol").addEventListener("change", (e) => { state.protocol = e.target.value; refresh(); });
+  setInterval(refresh, 20_000);
+  const deepLink = params.get("open");
+  if (deepLink) openDrawer(deepLink);
+}
 
-// ── claim a handle ────────────────────────────────────────────────────────
+// ── my handles (claim/pair/release modal) ─────────────────────────────────
 const claimModal = $("claim-modal"), claimScrim = $("claim-scrim");
-let session = null; // { token, email }
+let session = null;
 
 function showStep(id) {
   for (const s of claimModal.querySelectorAll(".claim-step")) s.hidden = s.id !== id;
@@ -285,6 +346,9 @@ function closeClaim() { claimModal.hidden = true; claimScrim.hidden = true; }
 $("claim-open").addEventListener("click", openClaim);
 $("claim-close").addEventListener("click", closeClaim);
 claimScrim.addEventListener("click", closeClaim);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { closeDrawer(); closeClaim(); }
+});
 
 $("claim-send").addEventListener("click", async () => {
   const email = $("claim-email").value.trim();
@@ -318,7 +382,6 @@ $("claim-verify").addEventListener("click", async () => {
 });
 
 async function loadShelf() {
-  // Existing handles under this email.
   const r = await fetch("/api/handles/mine", { headers: { Authorization: "Bearer " + session.token } });
   const d = await r.json();
   if (r.status === 401) { session = null; showStep("step-email"); return; }
@@ -342,7 +405,6 @@ async function loadShelf() {
         body: JSON.stringify({ handle: b.dataset.h }),
       });
       loadShelf();
-      refresh();
     });
   }
   for (const b of $("my-handles").querySelectorAll(".pair-btn")) {
@@ -356,13 +418,11 @@ async function loadShelf() {
       const info = $("pair-info");
       if (!d2.ok) { info.textContent = d2.error; info.classList.add("err"); return; }
       info.classList.remove("err");
-      info.innerHTML = `Pairing code <b class="mono">${esc(d2.code)}</b> — expires in 10 minutes.<br>
+      info.innerHTML = `Pairing code <b class="mono">${esc(d2.code)}</b>, expires in 10 minutes.<br>
         Have your agent's host sign <span class="mono">pan-pair-v1:${esc(d2.code)}:&lt;agent-id&gt;</span>
         and send it to <span class="mono">POST /api/pair/complete</span>. The handle attaches the moment it lands.`;
     });
   }
-  // Attachable agents: only listings this email submitted (PAN §4.1) —
-  // key-bearing agents attach via pairing instead.
   const lr = await fetch("/api/listings/mine", { headers: { Authorization: "Bearer " + session.token } });
   const ld = await lr.json();
   $("claim-attach").innerHTML = `<option value="">reserve name only</option>` +
@@ -391,7 +451,6 @@ $("claim-do").addEventListener("click", async () => {
   if (!d.ok) { claimMsg("claim-msg", d.error, true); return; }
   $("done-handle").textContent = d.handle;
   showStep("step-done");
-  refresh();
 });
 
 $("done-copy").addEventListener("click", (e) =>
@@ -403,9 +462,5 @@ $("done-another").addEventListener("click", () => {
 });
 
 refreshStats();
-refresh();
-const deepLink = new URLSearchParams(location.search).get("open");
-if (deepLink) openDrawer(deepLink);
-// Presence moves on its own; keep the shelf current without user action.
 setInterval(refreshStats, 10_000);
-setInterval(refresh, 20_000);
+if (params.get("claim") === "1") openClaim();

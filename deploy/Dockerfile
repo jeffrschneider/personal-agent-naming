@@ -13,5 +13,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /w/Agent-Catalog-ARD/target/release/agent-catalog /usr/local/bin/agent-catalog
+# The spec is a document, not code: shipped beside the binary, read at runtime.
+COPY --from=build /w/Agent-Catalog-ARD/PAN-SPEC.md /srv/PAN-SPEC.md
+WORKDIR /srv
 ENV RUST_LOG=info
 ENTRYPOINT ["/usr/local/bin/agent-catalog"]

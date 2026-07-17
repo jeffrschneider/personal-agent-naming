@@ -255,4 +255,30 @@ button { font: inherit; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: .25rem .8rem; font-size: .82rem; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-all; }
 
+/* ── lookup (the default surface) ── */
+.brand:hover { text-decoration: none; }
+a.brand { color: var(--text); }
+.lookup-wrap { max-width: 720px; }
+.lk-hero { text-align: center; padding: 3.2rem 0 1.6rem; }
+.lk-hero h1 { font-size: 1.8rem; letter-spacing: -.02em; margin: 0 0 .5rem; }
+.lk-sub { color: var(--muted); max-width: 46ch; margin: 0 auto 1.6rem; }
+.lk-row { display: flex; gap: .6rem; max-width: 560px; margin: 0 auto; }
+.lk-input { flex: 1; min-width: 0; font-size: 1rem; padding: .7rem .9rem; }
+.lk-msg { min-height: 1.5em; color: var(--muted); font-size: .85rem; margin-top: .8rem; }
+.lk-msg.err { color: #f87171; }
+
+.profile {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1.3rem 1.4rem 1.6rem; margin: 0 auto 3rem; max-width: 620px;
+}
+.profile .d-section { margin-top: 1.3rem; }
+.profile .d-section > h3 {
+  font-size: .74rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); margin: 0 0 .55rem; font-weight: 650;
+}
+.profile h2 { margin: 0; font-size: 1.3rem; letter-spacing: -.01em; }
+.profile .d-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+.profile .d-sub { margin: .35rem 0 1rem; }
+.profile details.manifest > summary { cursor: pointer; color: var(--muted); font-size: .82rem; }
+
 [hidden] { display: none !important; }

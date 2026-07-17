@@ -20,6 +20,7 @@ use crate::store;
 pub fn router(pool: PgPool) -> Router {
     Router::new()
         .route("/", get(ui_index))
+        .route("/browse", get(ui_index))
         .route("/spec", get(spec_page))
         .route("/spec.md", get(spec_raw))
         .route("/ui/style.css", get(ui_css))
@@ -51,13 +52,23 @@ pub fn router(pool: PgPool) -> Router {
 async fn ui_index() -> axum::response::Html<&'static str> {
     axum::response::Html(include_str!("../ui/index.html"))
 }
+/// The spec is a document, not code — it loads from disk (PAN_SPEC_PATH,
+/// default ./PAN-SPEC.md) so editing it never requires a rebuild.
+async fn read_spec() -> Result<String, (StatusCode, String)> {
+    let path = std::env::var("PAN_SPEC_PATH").unwrap_or_else(|_| "PAN-SPEC.md".to_string());
+    tokio::fs::read_to_string(&path).await.map_err(|e| {
+        log::error!("[catalog] spec file unreadable at {path}: {e}");
+        (StatusCode::INTERNAL_SERVER_ERROR, "spec file missing on this deployment".to_string())
+    })
+}
+
 /// The PAN spec, rendered. The registrar publishes the protocol it speaks.
-async fn spec_page() -> axum::response::Html<String> {
-    let md = include_str!("../PAN-SPEC.md");
-    let parser = pulldown_cmark::Parser::new_ext(md, pulldown_cmark::Options::all());
+async fn spec_page() -> Result<axum::response::Html<String>, (StatusCode, String)> {
+    let md = read_spec().await?;
+    let parser = pulldown_cmark::Parser::new_ext(&md, pulldown_cmark::Options::all());
     let mut body = String::new();
     pulldown_cmark::html::push_html(&mut body, parser);
-    axum::response::Html(format!(
+    Ok(axum::response::Html(format!(
         r#"<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Personal Agent Naming (PAN) · Agent Catalog</title>
@@ -76,14 +87,14 @@ async fn spec_page() -> axum::response::Html<String> {
   blockquote {{ border-left:3px solid #d9a441; margin:0; padding:.1rem 1rem; color:#8695a8; }}
   .top {{ font-size:.85rem; }} hr {{ border:none; border-top:1px solid #1e2937; }}
 </style></head><body><main>
-<p class="top"><a href="/">← the live shelf</a> · <a href="/spec.md">raw markdown</a></p>
+<p class="top"><a href="/">← look up a handle</a> · <a href="/spec.md">raw markdown</a></p>
 {body}
 </main></body></html>"#
-    ))
+    )))
 }
 
-async fn spec_raw() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {
-    ([(axum::http::header::CONTENT_TYPE, "text/markdown; charset=utf-8")], include_str!("../PAN-SPEC.md"))
+async fn spec_raw() -> Result<([(axum::http::HeaderName, &'static str); 1], String), (StatusCode, String)> {
+    Ok(([(axum::http::header::CONTENT_TYPE, "text/markdown; charset=utf-8")], read_spec().await?))
 }
 
 async fn ui_css() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {

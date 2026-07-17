@@ -9,40 +9,56 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">Agent<span>Catalog</span></div>
+  <a class="brand" href="/">Agent<span>Catalog</span></a>
   <div class="tally" id="tally" aria-live="polite">
     <span class="mono" id="tally-total">—</span> agents indexed
     <span class="tally-sep">·</span>
     <span class="tally-live"><span class="dot pulse"></span><span class="mono" id="tally-online">—</span> listening now</span>
   </div>
-  <button id="claim-open" class="claim-btn">Claim a handle</button>
+  <button id="claim-open" class="claim-btn">My handles</button>
 </header>
 
-<div class="searchbar">
-  <input id="q" class="inp inp-search" type="search"
-         placeholder="Search agents — try “translate” or a claim like access:hubspot-api"
-         autocomplete="off" autofocus>
-  <button id="live-toggle" class="toggle" aria-pressed="false">
-    <span class="dot"></span> Listening now
-  </button>
-  <select id="source" class="inp sel" aria-label="Source">
-    <option value="">any source</option>
-    <option value="agentmesh">mesh</option>
-    <option value="a2a">a2a</option>
-    <option value="manual">manual</option>
-  </select>
-  <select id="protocol" class="inp sel" aria-label="Protocol">
-    <option value="">any protocol</option>
-    <option value="mesh">mesh</option>
-    <option value="a2a">a2a</option>
-    <option value="mcp">mcp</option>
-    <option value="http">http</option>
-  </select>
-</div>
+<!-- Lookup: the default view. A handle in, a card out. -->
+<main class="wrap lookup-wrap" id="view-lookup">
+  <div class="lk-hero">
+    <h1>Look up a handle</h1>
+    <p class="lk-sub">An agent's public name resolves to its card: who anchored
+    it, whether it's paired to a real agent, and whether it answers.</p>
+    <div class="lk-row">
+      <input id="lk-input" class="inp mono lk-input" type="search"
+             placeholder="Coder.you@gmail.com" autocomplete="off" autofocus
+             spellcheck="false">
+      <button id="lk-btn" class="btn">Resolve</button>
+    </div>
+    <div id="lk-msg" class="lk-msg"></div>
+  </div>
+  <div id="lk-card" class="profile" hidden></div>
+</main>
 
-<div id="active-filters" class="active-filters" hidden></div>
-
-<main class="wrap">
+<!-- Browse: the old shelf grid. Reachable at /browse only; not linked. -->
+<main class="wrap" id="view-browse" hidden>
+  <div class="searchbar">
+    <input id="q" class="inp inp-search" type="search"
+           placeholder="Search agents: try “translate” or a claim like access:hubspot-api"
+           autocomplete="off">
+    <button id="live-toggle" class="toggle" aria-pressed="false">
+      <span class="dot"></span> Listening now
+    </button>
+    <select id="source" class="inp sel" aria-label="Source">
+      <option value="">any source</option>
+      <option value="agentmesh">mesh</option>
+      <option value="a2a">a2a</option>
+      <option value="manual">manual</option>
+    </select>
+    <select id="protocol" class="inp sel" aria-label="Protocol">
+      <option value="">any protocol</option>
+      <option value="mesh">mesh</option>
+      <option value="a2a">a2a</option>
+      <option value="mcp">mcp</option>
+      <option value="http">http</option>
+    </select>
+  </div>
+  <div id="active-filters" class="active-filters" hidden></div>
   <div id="grid" class="agent-grid" aria-live="polite"></div>
   <div id="empty" class="empty-note" hidden></div>
 </main>
@@ -51,14 +67,14 @@
 <aside id="drawer" class="drawer" hidden aria-label="Listing detail"></aside>
 
 <div id="claim-scrim" class="drawer-scrim" hidden></div>
-<div id="claim-modal" class="modal" hidden aria-label="Claim a handle">
+<div id="claim-modal" class="modal" hidden aria-label="My handles">
   <div class="d-head">
-    <h2>Claim a handle</h2>
+    <h2>My handles</h2>
     <button class="d-close" id="claim-close" aria-label="Close">✕</button>
   </div>
 
   <div id="step-email" class="claim-step">
-    <p class="muted">A handle is your agent's public name — one unique string,
+    <p class="muted">A handle is your agent's public name: one unique string,
     anchored to an email you control.</p>
     <label class="claim-label" for="claim-email">Your email</label>
     <div class="claim-row">
