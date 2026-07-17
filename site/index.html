@@ -9,9 +9,13 @@
 <link rel="stylesheet" href="/site.css">
 <style>
   header.hero { padding: 4rem 0 0; }
+  .hero-annot { position: relative; padding-bottom: 118px; }
   .hero-handle { font-family: var(--mono); font-weight: 600; letter-spacing: -.02em;
-    font-size: clamp(1.35rem, 4.6vw, 3rem); line-height: 1.15; word-break: break-all; }
+    font-size: clamp(1rem, 4.2vw, 3rem); line-height: 1.15; white-space: nowrap; }
   .hero-handle .hname { color: var(--brass); }
+  #annot-svg { position: absolute; inset: 0; width: 100%; height: 100%;
+    overflow: visible; pointer-events: none; }
+  #annot-svg text { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; }
   .hero p.lede { max-width: 54ch; color: var(--muted); font-size: 1.08rem; margin: 1.4rem 0 2rem; }
 
   .claim-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
@@ -64,7 +68,20 @@
 
   <header class="hero">
     <div class="eyebrow">A name for your agent</div>
-    <div class="hero-handle"><span class="hname">Coder</span>.<span id="hero-you">you@gmail.com</span></div>
+    <div class="hero-annot" id="hero-annot">
+      <div class="hero-handle"><span class="hname" id="hh-name">Coder</span><span>.</span><span id="hero-you">you@gmail.com</span></div>
+      <svg id="annot-svg" aria-hidden="true">
+        <defs>
+          <marker id="arr-brass" viewBox="0 0 8 8" refX="4" refY="1.5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0.5 7 L 4 1 L 7.5 7" fill="none" stroke="#d9a441" stroke-width="1.4" stroke-linecap="round"/>
+          </marker>
+          <marker id="arr-muted" viewBox="0 0 8 8" refX="4" refY="1.5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0.5 7 L 4 1 L 7.5 7" fill="none" stroke="#8695a8" stroke-width="1.4" stroke-linecap="round"/>
+          </marker>
+        </defs>
+        <g id="annot-g"></g>
+      </svg>
+    </div>
     <p class="lede">
       Your agent works for you every day and has no name anyone else can use.
       PAN, Personal Agent Naming, fixes that: one unique string, anchored to
@@ -165,7 +182,57 @@ curl "https://agentcatalog.com/api/resolve?<span class="b">handle=PublicAgent.yo
   let yi = 0;
   const heroYou = document.getElementById("hero-you");
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduced) setInterval(() => { yi = (yi + 1) % YOUS.length; heroYou.textContent = YOUS[yi]; }, 2600);
+
+  // Callouts: underline each segment of the handle and point a labeled
+  // leader line at it. Redrawn on rotation and resize because the email
+  // segment changes width.
+  const annot = document.getElementById("hero-annot");
+  const nameEl = document.getElementById("hh-name");
+  const annotG = document.getElementById("annot-g");
+  const BRASS = "#d9a441", MUTED = "#8695a8";
+
+  function drawAnnot() {
+    const c = annot.getBoundingClientRect();
+    const rel = (r) => ({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
+    const n = rel(nameEl.getBoundingClientRect());
+    const y = rel(heroYou.getBoundingClientRect());
+    const uy = Math.max(n.y + n.h, y.y + y.h) + 6;
+    const narrow = c.width < 560;
+
+    // Label rows: name first, anchor second; on narrow screens both left-aligned.
+    const nameL = { x: n.x + 2, y: uy + 44, anchor: "start",
+      text: "YOUR AGENT'S NAME. YOU PICK IT.", color: BRASS,
+      lineFrom: { x: n.x + 30, y: uy + 32 } };
+    const youL = { x: narrow ? n.x + 2 : Math.min(y.x + y.w, c.width - 4), y: uy + 82,
+      anchor: narrow ? "start" : "end",
+      text: "THE EMAIL YOU ALREADY OWN. THE ANCHOR.", color: MUTED,
+      lineFrom: { x: Math.min(y.x + y.w * 0.7, c.width - 40), y: uy + 70 } };
+
+    const seg = (rect, color) =>
+      `<line x1="${rect.x}" y1="${uy}" x2="${rect.x + rect.w}" y2="${uy}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
+    const leader = (from, toX, color, marker) => {
+      const midY = (from.y + uy) / 2 + 6;
+      return `<path d="M ${from.x} ${from.y} Q ${from.x} ${midY}, ${(from.x + toX) / 2} ${midY} T ${toX} ${uy + 5}"
+        fill="none" stroke="${color}" stroke-width="1.4" marker-end="url(#${marker})"/>`;
+    };
+    const label = (l) =>
+      `<text x="${l.x}" y="${l.y}" fill="${l.color}" text-anchor="${l.anchor}">${l.text}</text>`;
+
+    annotG.innerHTML =
+      seg(n, BRASS) + seg(y, MUTED) +
+      leader(nameL.lineFrom, n.x + n.w / 2, BRASS, "arr-brass") +
+      leader(youL.lineFrom, y.x + y.w / 2, MUTED, "arr-muted") +
+      label(nameL) + label(youL);
+  }
+  drawAnnot();
+  addEventListener("resize", drawAnnot);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawAnnot);
+
+  if (!reduced) setInterval(() => {
+    yi = (yi + 1) % YOUS.length;
+    heroYou.textContent = YOUS[yi];
+    drawAnnot();
+  }, 2600);
 
   const AGENTS = [
     { h: ["Translator", "maria@gmail.com"],   claim: "skill:translate",     on: true  },
