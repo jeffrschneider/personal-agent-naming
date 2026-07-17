@@ -60,7 +60,7 @@ async fn spec_page() -> axum::response::Html<String> {
     axum::response::Html(format!(
         r#"<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Personal Agent Naming (PAN) — Agent Catalog</title>
+<title>Personal Agent Naming (PAN) · Agent Catalog</title>
 <style>
   body {{ background:#0a0e14; color:#e5edf7; font-family:Inter,system-ui,sans-serif;
          line-height:1.65; margin:0; }}
