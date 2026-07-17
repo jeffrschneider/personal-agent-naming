@@ -20,6 +20,8 @@ use crate::store;
 pub fn router(pool: PgPool) -> Router {
     Router::new()
         .route("/", get(ui_index))
+        .route("/spec", get(spec_page))
+        .route("/spec.md", get(spec_raw))
         .route("/ui/style.css", get(ui_css))
         .route("/ui/app.js", get(ui_js))
         .route("/healthz", get(healthz))
@@ -49,6 +51,41 @@ pub fn router(pool: PgPool) -> Router {
 async fn ui_index() -> axum::response::Html<&'static str> {
     axum::response::Html(include_str!("../ui/index.html"))
 }
+/// The PAN spec, rendered. The registrar publishes the protocol it speaks.
+async fn spec_page() -> axum::response::Html<String> {
+    let md = include_str!("../PAN-SPEC.md");
+    let parser = pulldown_cmark::Parser::new_ext(md, pulldown_cmark::Options::all());
+    let mut body = String::new();
+    pulldown_cmark::html::push_html(&mut body, parser);
+    axum::response::Html(format!(
+        r#"<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personal Agent Naming (PAN) — Agent Catalog</title>
+<style>
+  body {{ background:#0a0e14; color:#e5edf7; font-family:Inter,system-ui,sans-serif;
+         line-height:1.65; margin:0; }}
+  main {{ max-width:760px; margin:0 auto; padding:2.5rem 1.5rem 5rem; }}
+  a {{ color:#d9a441; }} h1,h2,h3 {{ letter-spacing:-.01em; }}
+  h1 {{ font-size:2rem; }} h2 {{ margin-top:2.2rem; border-bottom:1px solid #1e2937; padding-bottom:.3rem; }}
+  code {{ background:#111722; border:1px solid #1e2937; border-radius:4px; padding:.08em .35em;
+          font-family:"JetBrains Mono",ui-monospace,monospace; font-size:.85em; }}
+  pre {{ background:#111722; border:1px solid #1e2937; border-radius:8px; padding:.9rem 1rem;
+         overflow-x:auto; }} pre code {{ background:none; border:none; padding:0; }}
+  table {{ border-collapse:collapse; width:100%; font-size:.9rem; }}
+  th,td {{ border:1px solid #1e2937; padding:.45rem .6rem; text-align:left; }}
+  blockquote {{ border-left:3px solid #d9a441; margin:0; padding:.1rem 1rem; color:#8695a8; }}
+  .top {{ font-size:.85rem; }} hr {{ border:none; border-top:1px solid #1e2937; }}
+</style></head><body><main>
+<p class="top"><a href="/">← the live shelf</a> · <a href="/spec.md">raw markdown</a></p>
+{body}
+</main></body></html>"#
+    ))
+}
+
+async fn spec_raw() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {
+    ([(axum::http::header::CONTENT_TYPE, "text/markdown; charset=utf-8")], include_str!("../PAN-SPEC.md"))
+}
+
 async fn ui_css() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {
     ([(axum::http::header::CONTENT_TYPE, "text/css")], include_str!("../ui/style.css"))
 }

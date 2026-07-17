@@ -20,7 +20,8 @@ use std::net::SocketAddr;
 async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let port: u16 = std::env::var("CATALOG_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8080);
+    // PORT is the one canonical name (it's also Cloud Run's contract).
+    let port: u16 = std::env::var("PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8080);
 
     // DATABASE_URL points at a deployment's database. Without it, the catalog
     // runs its own embedded PostgreSQL — no external service, no Docker. The
