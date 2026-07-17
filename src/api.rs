@@ -27,6 +27,11 @@ pub fn router(pool: PgPool) -> Router {
         .route("/api/listings", get(list).post(submit))
         .route("/api/listings/:id", get(get_one))
         .route("/api/resolve", get(resolve_handle))
+        .route("/.well-known/webfinger", get(webfinger))
+        .route("/api/listings/mine", get(listings_mine))
+        .route("/api/pair/start", post(pair_start))
+        .route("/api/pair/complete", post(pair_complete))
+        .route("/api/handles/log/checkpoint", get(log_checkpoint))
         .route("/api/handles/start", post(handles_start))
         .route("/api/handles/verify", post(handles_verify))
         .route("/api/handles/claim", post(handles_claim))
@@ -84,14 +89,40 @@ async fn get_one(
 
 async fn submit(
     State(pool): State<PgPool>,
+    headers: HeaderMap,
     Json(body): Json<SubmitListing>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    // Manual submissions carry a verified owner (PAN §4.1) — it's what makes
+    // them email-bindable, and it's the public instance's spam control.
+    let email = session_from(&pool, &headers).await?;
     if body.name.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "name is required".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": "name is required" })),
+        ));
     }
-    let id = store::submit(&pool, &body).await.map_err(internal)?;
-    log::info!("[catalog] manual submission upserted: {} ({})", body.name, id);
-    Ok(Json(serde_json::json!({ "ok": true, "id": id })))
+    let id = store::submit(&pool, &body, &email)
+        .await
+        .map_err(|e| reg_err(e.into()))?;
+    match id {
+        Some(id) => {
+            log::info!("[catalog] manual submission upserted: {} ({id}) by {email}", body.name);
+            Ok(Json(serde_json::json!({ "ok": true, "id": id })))
+        }
+        None => Err((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({ "ok": false, "error": "that source_id belongs to another submitter" })),
+        )),
+    }
+}
+
+async fn listings_mine(
+    State(pool): State<PgPool>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let email = session_from(&pool, &headers).await?;
+    let listings = store::listings_mine(&pool, &email).await.map_err(|e| reg_err(e.into()))?;
+    Ok(Json(serde_json::json!({ "ok": true, "listings": listings })))
 }
 
 fn internal(e: sqlx::Error) -> (StatusCode, String) {
@@ -129,11 +160,42 @@ async fn session_from(
     registrar::session_email(pool, token).await.map_err(reg_err)
 }
 
-/// Deliver a verification code. No email provider is wired yet, so dev mode
-/// logs it to the server console; the response says which delivery happened.
-fn deliver_code(email: &str, code: &str) -> &'static str {
-    log::info!("[catalog:registrar] verification code for {email}: {code} (dev mode — no email provider configured)");
-    "console"
+/// Deliver a verification code. With RESEND_API_KEY set, sends via Resend
+/// (from RESEND_FROM, default onboarding@resend.dev); otherwise dev mode
+/// logs it to the server console. The response says which delivery happened.
+/// NOTE: the Resend path is unverified until a real API key exists.
+async fn deliver_code(email: &str, code: &str) -> &'static str {
+    let Ok(api_key) = std::env::var("RESEND_API_KEY") else {
+        log::info!("[catalog:registrar] verification code for {email}: {code} (dev mode — no email provider configured)");
+        return "console";
+    };
+    let from = std::env::var("RESEND_FROM").unwrap_or_else(|_| "onboarding@resend.dev".to_string());
+    let body = serde_json::json!({
+        "from": from,
+        "to": [email],
+        "subject": format!("{code} is your Agent Catalog verification code"),
+        "text": format!("Your verification code is {code}. It expires in 15 minutes.\n\nIf you didn't request this, ignore this email."),
+    });
+    let result = reqwest::Client::new()
+        .post("https://api.resend.com/emails")
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await;
+    match result {
+        Ok(r) if r.status().is_success() => {
+            log::info!("[catalog:registrar] verification code emailed to {email}");
+            "email"
+        }
+        Ok(r) => {
+            log::error!("[catalog:registrar] Resend send failed for {email}: HTTP {}", r.status());
+            "failed"
+        }
+        Err(e) => {
+            log::error!("[catalog:registrar] Resend send failed for {email}: {e}");
+            "failed"
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -146,7 +208,7 @@ async fn handles_start(
     Json(body): Json<StartBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let (email, code) = registrar::start_verification(&pool, &body.email).await.map_err(reg_err)?;
-    let delivery = deliver_code(&email, &code);
+    let delivery = deliver_code(&email, &code).await;
     Ok(Json(serde_json::json!({ "ok": true, "email": email, "delivery": delivery })))
 }
 
@@ -224,11 +286,84 @@ async fn handles_mine(
 }
 
 #[derive(Deserialize)]
+struct PairStartBody {
+    handle: String,
+}
+
+async fn pair_start(
+    State(pool): State<PgPool>,
+    headers: HeaderMap,
+    Json(body): Json<PairStartBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let email = session_from(&pool, &headers).await?;
+    let (code, expires_at) =
+        registrar::pair_start(&pool, &email, &body.handle).await.map_err(reg_err)?;
+    Ok(Json(serde_json::json!({ "ok": true, "code": code, "expires_at": expires_at })))
+}
+
+#[derive(Deserialize)]
+struct PairCompleteBody {
+    code: String,
+    agent_id: String,
+    signature: String,
+}
+
+/// Unauthenticated by design (PAN §4.2): code + agent-key signature are the
+/// two proofs, and the binding is their intersection.
+async fn pair_complete(
+    State(pool): State<PgPool>,
+    Json(body): Json<PairCompleteBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let handle = registrar::pair_complete(&pool, &body.code, &body.agent_id, &body.signature)
+        .await
+        .map_err(reg_err)?;
+    Ok(Json(serde_json::json!({ "ok": true, "handle": handle })))
+}
+
+async fn log_checkpoint(
+    State(pool): State<PgPool>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let cp = registrar::checkpoint(&pool).await.map_err(reg_err)?;
+    Ok(Json(serde_json::json!({ "ok": true, "checkpoint": cp })))
+}
+
+/// The PAN card (§5.1): envelope + typed endpoints + verbatim manifest.
+fn build_card(h: &registrar::Handle, listing: Option<&crate::model::Listing>) -> serde_json::Value {
+    let mut endpoints: Vec<serde_json::Value> = Vec::new();
+    if let Some(l) = listing {
+        if l.source == "agentmesh" {
+            endpoints.push(serde_json::json!({
+                "protocol": "agentmesh",
+                "agent_id": l.source_id,
+                "node": l.manifest.get("node").and_then(|n| n.get("id")).cloned(),
+            }));
+        } else if let Some(url) = l.manifest.get("endpoint").and_then(|v| v.as_str()) {
+            endpoints.push(serde_json::json!({ "protocol": l.protocol, "url": url }));
+        }
+    }
+    serde_json::json!({
+        "handle": h.handle,
+        "anchor": h.anchor,
+        "binding": h.bind_method,
+        "claimed_at": h.created_at,
+        "verified_at": h.verified_at,
+        "stale": h.stale,
+        "reserved": listing.is_none(),
+        "presence": listing.map(|l| serde_json::json!({
+            "state": l.presence, "last_seen_at": l.last_seen_at,
+        })),
+        "endpoints": endpoints,
+        "manifest": listing.map(|l| l.manifest.clone()),
+    })
+}
+
+#[derive(Deserialize)]
 struct ResolveQuery {
     handle: String,
 }
 
-/// Public exact-string resolution: handle -> record + bound listing card.
+/// Public exact-string resolution: handle -> card (PAN §5). The bound
+/// listing rides along for this registrar's own UI.
 async fn resolve_handle(
     State(pool): State<PgPool>,
     Query(q): Query<ResolveQuery>,
@@ -244,9 +379,57 @@ async fn resolve_handle(
                 Some(id) => store::get(&pool, id).await.map_err(|e| reg_err(e.into()))?,
                 None => None,
             };
-            Ok(Json(serde_json::json!({ "ok": true, "handle": h, "listing": listing })))
+            Ok(Json(serde_json::json!({
+                "ok": true,
+                "card": build_card(&h, listing.as_ref()),
+                "listing": listing,
+            })))
         }
     }
+}
+
+#[derive(Deserialize)]
+struct WebFingerQuery {
+    resource: String,
+}
+
+/// WebFinger (RFC 7033, PAN §5.2): a handle is a valid acct: URI.
+async fn webfinger(
+    State(pool): State<PgPool>,
+    Query(q): Query<WebFingerQuery>,
+) -> Result<([(axum::http::HeaderName, &'static str); 1], Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    let handle = q.resource.strip_prefix("acct:").unwrap_or(&q.resource);
+    let found = registrar::resolve(&pool, handle).await.map_err(reg_err)?;
+    let Some(h) = found else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "ok": false, "error": "no agent by that name" })),
+        ));
+    };
+    let jrd = serde_json::json!({
+        "subject": format!("acct:{}", h.handle),
+        "properties": {
+            "urn:pan:anchor": h.anchor,
+            "urn:pan:binding": h.bind_method,
+        },
+        "links": [{
+            "rel": "urn:pan:card",
+            "type": "application/json",
+            "href": format!("/api/resolve?handle={}", urlencode(&h.handle)),
+        }],
+    });
+    Ok(([(axum::http::header::CONTENT_TYPE, "application/jrd+json")], Json(jrd)))
+}
+
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]

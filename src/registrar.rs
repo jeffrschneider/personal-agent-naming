@@ -48,8 +48,18 @@ pub struct Handle {
     pub handle: String,
     pub email: String,
     pub listing_id: Option<Uuid>,
+    pub anchor: String,
+    pub bind_method: Option<String>,
+    pub verified_at: Option<DateTime<Utc>>,
+    pub stale: bool,
     pub created_at: DateTime<Utc>,
     pub released_at: Option<DateTime<Utc>>,
+}
+
+macro_rules! handle_cols {
+    () => {
+        "handle, email, listing_id, anchor, bind_method, verified_at, stale, created_at, released_at"
+    };
 }
 
 fn normalize_email(email: &str) -> Result<String, RegistrarError> {
@@ -155,6 +165,31 @@ pub async fn session_email(pool: &PgPool, token: Uuid) -> Result<String, Registr
     row.map(|(e,)| e).ok_or(RegistrarError::Unauthorized)
 }
 
+/// Canonical JSON for hashing: compact, keys recursively sorted. Explicit
+/// so the chain never depends on serde_json's map-ordering configuration.
+fn canonical_json(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            let inner: Vec<String> = keys
+                .into_iter()
+                .map(|k| format!("{}:{}", serde_json::Value::String(k.clone()), canonical_json(&map[k])))
+                .collect();
+            format!("{{{}}}", inner.join(","))
+        }
+        serde_json::Value::Array(items) => {
+            let inner: Vec<String> = items.iter().map(canonical_json).collect();
+            format!("[{}]", inner.join(","))
+        }
+        other => other.to_string(),
+    }
+}
+
+/// Append to the hash-chained transparency log (PAN §6). Serialized via an
+/// advisory lock; each entry's hash covers the canonical JSON serialization
+/// (compact, lexicographically sorted keys) that includes the previous
+/// entry's hash.
 async fn log_action(
     pool: &PgPool,
     action: &str,
@@ -162,14 +197,127 @@ async fn log_action(
     email: &str,
     detail: serde_json::Value,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("INSERT INTO handle_log (action, handle, email, detail) VALUES ($1, $2, $3, $4)")
-        .bind(action)
-        .bind(handle)
-        .bind(email)
-        .bind(detail)
-        .execute(pool)
+    use base64::Engine;
+    use sha2::Digest;
+
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(4207)").execute(&mut *tx).await?;
+    let head: Option<(i64, Option<String>)> =
+        sqlx::query_as("SELECT id, entry_hash FROM handle_log ORDER BY id DESC LIMIT 1")
+            .fetch_optional(&mut *tx)
+            .await?;
+    // Pre-chain rows have NULL hashes; the chain geneses with "".
+    let prev_hash = head.and_then(|(_, h)| h).unwrap_or_default();
+    let at = Utc::now();
+
+    let (seq,): (i64,) = sqlx::query_as(
+        "INSERT INTO handle_log (at, action, handle, email, detail, prev_hash) \
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+    )
+    .bind(at)
+    .bind(action)
+    .bind(handle)
+    .bind(email)
+    .bind(&detail)
+    .bind(&prev_hash)
+    .fetch_one(&mut *tx)
+    .await?;
+
+    let canonical = serde_json::json!({
+        "action": action,
+        "at": at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+        "detail": detail,
+        "email": email,
+        "handle": handle,
+        "prev_hash": prev_hash,
+        "seq": seq,
+    });
+    let digest = sha2::Sha256::digest(canonical_json(&canonical).as_bytes());
+    let entry_hash = base64::engine::general_purpose::STANDARD.encode(digest);
+
+    sqlx::query("UPDATE handle_log SET entry_hash = $1 WHERE id = $2")
+        .bind(&entry_hash)
+        .bind(seq)
+        .execute(&mut *tx)
         .await?;
+    tx.commit().await?;
     Ok(())
+}
+
+/// The registrar's Ed25519 signing keypair, created on first use and kept
+/// in registrar_meta.
+async fn signing_key(pool: &PgPool) -> Result<agentmesh::KeyPair, RegistrarError> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM registrar_meta WHERE key = 'log_signing_seed'")
+            .fetch_optional(pool)
+            .await?;
+    if let Some((seed,)) = row {
+        return agentmesh::KeyPair::from_seed(&seed)
+            .map_err(|e| RegistrarError::Invalid(format!("bad stored signing seed: {e}")));
+    }
+    let kp = agentmesh::KeyPair::new_user();
+    let seed = kp
+        .seed()
+        .map_err(|e| RegistrarError::Invalid(format!("seed export failed: {e}")))?;
+    sqlx::query(
+        "INSERT INTO registrar_meta (key, value) VALUES ('log_signing_seed', $1) \
+         ON CONFLICT (key) DO NOTHING",
+    )
+    .bind(&seed)
+    .execute(pool)
+    .await?;
+    log::info!("[catalog:registrar] generated log signing key: {}", kp.public_key());
+    Ok(kp)
+}
+
+/// Signed checkpoint over the log head (PAN §6): anyone replaying the log
+/// and recomputing the chain can check it against this signature.
+pub async fn checkpoint(pool: &PgPool) -> Result<serde_json::Value, RegistrarError> {
+    use base64::Engine;
+    let head: Option<(i64, Option<String>)> =
+        sqlx::query_as("SELECT id, entry_hash FROM handle_log ORDER BY id DESC LIMIT 1")
+            .fetch_optional(pool)
+            .await?;
+    let (seq, entry_hash) = match head {
+        Some((s, Some(h))) => (s, h),
+        _ => return Err(RegistrarError::Invalid("log has no chained entries yet".into())),
+    };
+    let kp = signing_key(pool).await?;
+    let at = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true);
+    let msg = format!("pan-log-checkpoint-v1:{seq}:{entry_hash}:{at}");
+    let sig = kp
+        .sign(msg.as_bytes())
+        .map_err(|e| RegistrarError::Invalid(format!("signing failed: {e}")))?;
+    Ok(serde_json::json!({
+        "seq": seq,
+        "entry_hash": entry_hash,
+        "at": at,
+        "signature": base64::engine::general_purpose::STANDARD.encode(sig),
+        "signer": kp.public_key(),
+    }))
+}
+
+/// Can this verified email bind a handle to this listing on email proof
+/// alone? Only if it submitted the listing (PAN §4.1). Key-bearing listings
+/// need pairing (§4.2) — email proof says nothing about agent control.
+async fn check_email_bindable(
+    pool: &PgPool,
+    email: &str,
+    listing_id: Uuid,
+) -> Result<(), RegistrarError> {
+    let row: Option<(String, Option<String>)> =
+        sqlx::query_as("SELECT source, owner_email FROM listings WHERE id = $1")
+            .bind(listing_id)
+            .fetch_optional(pool)
+            .await?;
+    match row {
+        None => Err(RegistrarError::Invalid("no such listing".into())),
+        Some((source, owner)) if source == "manual" && owner.as_deref() == Some(email) => Ok(()),
+        Some((source, _)) if source == "manual" => Err(RegistrarError::Unauthorized),
+        Some(_) => Err(RegistrarError::Invalid(
+            "this agent requires key pairing — proving you received an email doesn't prove you operate it".into(),
+        )),
+    }
 }
 
 /// Claim `<name>.<email>` for a verified email. Full-string uniqueness,
@@ -181,6 +329,9 @@ pub async fn claim(
     listing_id: Option<Uuid>,
 ) -> Result<String, RegistrarError> {
     let name = validate_name(name)?;
+    if let Some(id) = listing_id {
+        check_email_bindable(pool, email, id).await?;
+    }
     let handle = format!("{name}.{email}");
     let key = handle.to_lowercase();
 
@@ -198,7 +349,8 @@ pub async fn claim(
     }
 
     let inserted = sqlx::query(
-        "INSERT INTO handles (handle, handle_key, email, listing_id) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO handles (handle, handle_key, email, listing_id, bind_method) \
+         VALUES ($1, $2, $3, $4, CASE WHEN $4::uuid IS NULL THEN NULL ELSE 'email-submitter' END)",
     )
     .bind(&handle)
     .bind(&key)
@@ -220,15 +372,22 @@ pub async fn claim(
     Ok(handle)
 }
 
-/// Attach (or re-attach) a handle to an agent listing.
+/// Attach (or re-attach) a handle to an agent listing on email proof
+/// (submitter-match only, §4.1). Detaching (listing_id = None) is always
+/// allowed for the handle's owner.
 pub async fn bind(
     pool: &PgPool,
     email: &str,
     handle: &str,
     listing_id: Option<Uuid>,
 ) -> Result<(), RegistrarError> {
+    if let Some(id) = listing_id {
+        check_email_bindable(pool, email, id).await?;
+    }
     let n = sqlx::query(
-        "UPDATE handles SET listing_id = $3 WHERE handle_key = lower($1) AND email = $2 AND released_at IS NULL",
+        "UPDATE handles SET listing_id = $3, \
+             bind_method = CASE WHEN $3::uuid IS NULL THEN NULL ELSE 'email-submitter' END \
+         WHERE handle_key = lower($1) AND email = $2 AND released_at IS NULL",
     )
     .bind(handle)
     .bind(email)
@@ -239,9 +398,119 @@ pub async fn bind(
     if n == 0 {
         return Err(RegistrarError::Unauthorized);
     }
-    log_action(pool, "bound", handle, email, serde_json::json!({ "listing_id": listing_id })).await?;
-    log::info!("[catalog:registrar] bound: {handle} -> {listing_id:?}");
+    log_action(
+        pool,
+        "bound",
+        handle,
+        email,
+        serde_json::json!({ "listing_id": listing_id, "method": "email-submitter" }),
+    )
+    .await?;
+    log::info!("[catalog:registrar] bound: {handle} -> {listing_id:?} (email-submitter)");
     Ok(())
+}
+
+/// Start pairing (§4.2): a short single-use code the handle owner relays to
+/// whatever software holds their agent's key.
+pub async fn pair_start(
+    pool: &PgPool,
+    email: &str,
+    handle: &str,
+) -> Result<(String, DateTime<Utc>), RegistrarError> {
+    let owned: Option<(String,)> = sqlx::query_as(
+        "SELECT handle FROM handles WHERE handle_key = lower($1) AND email = $2 AND released_at IS NULL",
+    )
+    .bind(handle)
+    .bind(email)
+    .fetch_optional(pool)
+    .await?;
+    let Some((display_handle,)) = owned else {
+        return Err(RegistrarError::Unauthorized);
+    };
+
+    // Short, copyable, unambiguous: XXX-XXX from A-Z/2-9 minus 0/O/1/I.
+    const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let bytes = *Uuid::new_v4().as_bytes();
+    let chars: String =
+        bytes.iter().take(6).map(|b| ALPHABET[(*b as usize) % ALPHABET.len()] as char).collect();
+    let code = format!("{}-{}", &chars[..3], &chars[3..]);
+    let expires = Utc::now() + chrono::Duration::minutes(10);
+    sqlx::query("INSERT INTO pairing_codes (code, handle, email, expires_at) VALUES ($1, $2, $3, $4)")
+        .bind(&code)
+        .bind(&display_handle)
+        .bind(email)
+        .bind(expires)
+        .execute(pool)
+        .await?;
+    log::info!("[catalog:registrar] pairing started for {display_handle}");
+    Ok((code, expires))
+}
+
+/// Complete pairing (§4.2). Unauthenticated by design: the code proves the
+/// handle owner initiated it; the signature over the canonical string
+/// `pan-pair-v1:<code>:<agent-id>` proves agent control. The binding is
+/// the intersection of the two proofs.
+pub async fn pair_complete(
+    pool: &PgPool,
+    code: &str,
+    agent_id: &str,
+    signature_b64: &str,
+) -> Result<String, RegistrarError> {
+    use base64::Engine;
+
+    let code = code.trim().to_uppercase();
+    let agent_id = agent_id.trim();
+
+    let row: Option<(String, String)> = sqlx::query_as(
+        "UPDATE pairing_codes SET used_at = now() \
+         WHERE code = $1 AND used_at IS NULL AND expires_at > now() \
+         RETURNING handle, email",
+    )
+    .bind(&code)
+    .fetch_optional(pool)
+    .await?;
+    let Some((handle, email)) = row else {
+        return Err(RegistrarError::Invalid("unknown, used, or expired pairing code".into()));
+    };
+
+    let sig = base64::engine::general_purpose::STANDARD
+        .decode(signature_b64.trim())
+        .map_err(|_| RegistrarError::Invalid("signature is not valid base64".into()))?;
+    let msg = format!("pan-pair-v1:{code}:{agent_id}");
+    let kp = agentmesh::KeyPair::from_public_key(agent_id)
+        .map_err(|_| RegistrarError::Invalid("agent_id is not a valid public key".into()))?;
+    kp.verify(msg.as_bytes(), &sig)
+        .map_err(|_| RegistrarError::Invalid("signature does not verify against the agent key".into()))?;
+
+    let listing: Option<(Uuid,)> =
+        sqlx::query_as("SELECT id FROM listings WHERE source = 'agentmesh' AND source_id = $1")
+            .bind(agent_id)
+            .fetch_optional(pool)
+            .await?;
+    let Some((listing_id,)) = listing else {
+        return Err(RegistrarError::Invalid(
+            "no listing with that agent key — the catalog hasn't harvested this agent".into(),
+        ));
+    };
+
+    sqlx::query(
+        "UPDATE handles SET listing_id = $2, bind_method = 'agent-key' \
+         WHERE handle_key = lower($1) AND released_at IS NULL",
+    )
+    .bind(&handle)
+    .bind(listing_id)
+    .execute(pool)
+    .await?;
+    log_action(
+        pool,
+        "bound",
+        &handle,
+        &email,
+        serde_json::json!({ "listing_id": listing_id, "method": "agent-key", "agent_id": agent_id }),
+    )
+    .await?;
+    log::info!("[catalog:registrar] bound: {handle} -> {listing_id} (agent-key, {agent_id})");
+    Ok(handle)
 }
 
 /// Release a handle (tombstone). It stays in history and cools off.
@@ -264,10 +533,11 @@ pub async fn release(pool: &PgPool, email: &str, handle: &str) -> Result<(), Reg
 
 /// All active handles anchored to an email.
 pub async fn mine(pool: &PgPool, email: &str) -> Result<Vec<Handle>, RegistrarError> {
-    Ok(sqlx::query_as::<_, Handle>(
-        "SELECT handle, email, listing_id, created_at, released_at
-         FROM handles WHERE email = $1 AND released_at IS NULL ORDER BY created_at",
-    )
+    Ok(sqlx::query_as::<_, Handle>(concat!(
+        "SELECT ",
+        handle_cols!(),
+        " FROM handles WHERE email = $1 AND released_at IS NULL ORDER BY created_at"
+    ))
     .bind(email)
     .fetch_all(pool)
     .await?)
@@ -275,27 +545,35 @@ pub async fn mine(pool: &PgPool, email: &str) -> Result<Vec<Handle>, RegistrarEr
 
 /// Exact-string resolution: handle -> its record (active only).
 pub async fn resolve(pool: &PgPool, handle: &str) -> Result<Option<Handle>, RegistrarError> {
-    Ok(sqlx::query_as::<_, Handle>(
-        "SELECT handle, email, listing_id, created_at, released_at
-         FROM handles WHERE handle_key = lower(trim($1)) AND released_at IS NULL",
-    )
+    Ok(sqlx::query_as::<_, Handle>(concat!(
+        "SELECT ",
+        handle_cols!(),
+        " FROM handles WHERE handle_key = lower(trim($1)) AND released_at IS NULL"
+    ))
     .bind(handle)
     .fetch_optional(pool)
     .await?)
 }
 
-/// The public transparency log, newest first.
+/// The public transparency log, newest first, with chain hashes.
 pub async fn log_entries(pool: &PgPool, limit: i64) -> Result<Vec<serde_json::Value>, RegistrarError> {
-    let rows: Vec<(DateTime<Utc>, String, String, serde_json::Value)> = sqlx::query_as(
-        "SELECT at, action, handle, detail FROM handle_log ORDER BY id DESC LIMIT $1",
-    )
-    .bind(limit.clamp(1, 500))
-    .fetch_all(pool)
-    .await?;
+    let rows: Vec<(i64, DateTime<Utc>, String, String, String, serde_json::Value, Option<String>, Option<String>)> =
+        sqlx::query_as(
+            "SELECT id, at, action, handle, email, detail, prev_hash, entry_hash \
+             FROM handle_log ORDER BY id DESC LIMIT $1",
+        )
+        .bind(limit.clamp(1, 500))
+        .fetch_all(pool)
+        .await?;
     Ok(rows
         .into_iter()
-        .map(|(at, action, handle, detail)| {
-            serde_json::json!({ "at": at, "action": action, "handle": handle, "detail": detail })
+        .map(|(seq, at, action, handle, email, detail, prev_hash, entry_hash)| {
+            serde_json::json!({
+                "seq": seq,
+                "at": at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+                "action": action, "handle": handle, "email": email, "detail": detail,
+                "prev_hash": prev_hash, "entry_hash": entry_hash,
+            })
         })
         .collect())
 }

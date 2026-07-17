@@ -210,8 +210,10 @@ button { font: inherit; }
 .mh-row { display: flex; align-items: center; gap: .6rem; padding: .4rem 0;
   border-bottom: 1px solid var(--border); font-size: .8rem; }
 .mh-row .mono { word-break: break-all; }
-.mh-row .rel { margin-left: auto; background: none; border: none; color: var(--muted);
+.mh-row .rel, .mh-row .pair-btn { background: none; border: none; color: var(--muted);
   cursor: pointer; font-size: .74rem; }
+.mh-row .pair-btn { margin-left: auto; }
+.mh-row .pair-btn:hover { color: var(--accent); }
 .mh-row .rel:hover { color: #f87171; }
 .mh-head { font-size: .74rem; text-transform: uppercase; letter-spacing: .08em;
   color: var(--muted); font-weight: 650; margin-bottom: .3rem; }

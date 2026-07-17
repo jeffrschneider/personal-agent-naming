@@ -220,18 +220,23 @@ pub async fn set_presence_by_node(
     Ok(result.rows_affected())
 }
 
-/// Upsert a manual submission. (source, source_id) is the idempotency key —
-/// re-submitting updates rather than duplicating.
-pub async fn submit(pool: &PgPool, s: &SubmitListing) -> Result<uuid::Uuid, sqlx::Error> {
+/// Upsert a manual submission under a verified owner. (source, source_id)
+/// is the idempotency key; re-submission only updates the owner's own rows.
+pub async fn submit(
+    pool: &PgPool,
+    s: &SubmitListing,
+    owner_email: &str,
+) -> Result<Option<uuid::Uuid>, sqlx::Error> {
     let source_id = s
         .source_id
         .clone()
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let protocol = s.protocol.clone().unwrap_or_else(|| "unknown".to_string());
-    let (id,): (uuid::Uuid,) = sqlx::query_as(
+    // A failed owner check on conflict yields no row: someone else's source_id.
+    let row: Option<(uuid::Uuid,)> = sqlx::query_as(
         r#"
-        INSERT INTO listings (source, source_id, name, description, manifest, specialties, protocol)
-        VALUES ('manual', $1, $2, $3, $4, $5, $6)
+        INSERT INTO listings (source, source_id, name, description, manifest, specialties, protocol, owner_email)
+        VALUES ('manual', $1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (source, source_id) DO UPDATE SET
             name = EXCLUDED.name,
             description = EXCLUDED.description,
@@ -239,6 +244,7 @@ pub async fn submit(pool: &PgPool, s: &SubmitListing) -> Result<uuid::Uuid, sqlx
             specialties = EXCLUDED.specialties,
             protocol = EXCLUDED.protocol,
             updated_at = now()
+        WHERE listings.owner_email = EXCLUDED.owner_email
         RETURNING id
         "#,
     )
@@ -248,7 +254,29 @@ pub async fn submit(pool: &PgPool, s: &SubmitListing) -> Result<uuid::Uuid, sqlx
     .bind(&s.manifest)
     .bind(&s.specialties)
     .bind(&protocol)
-    .fetch_one(pool)
+    .bind(owner_email)
+    .fetch_optional(pool)
     .await?;
-    Ok(id)
+    Ok(row.map(|(id,)| id))
+}
+
+/// The manual listings a verified email submitted (its bindable set).
+pub async fn listings_mine(pool: &PgPool, email: &str) -> Result<Vec<Listing>, sqlx::Error> {
+    sqlx::query_as::<_, Listing>(
+        r#"
+        SELECT l.id, l.source, l.source_id, l.name, l.description, l.manifest,
+               l.specialties, l.protocol, l.trust, l.created_at, l.updated_at,
+               p.state AS presence, p.last_seen_at,
+               (SELECT h.handle FROM handles h
+                WHERE h.listing_id = l.id AND h.released_at IS NULL
+                ORDER BY h.created_at LIMIT 1) AS handle
+        FROM listings l
+        LEFT JOIN presence p ON p.listing_id = l.id
+        WHERE l.source = 'manual' AND l.owner_email = $1
+        ORDER BY l.updated_at DESC
+        "#,
+    )
+    .bind(email)
+    .fetch_all(pool)
+    .await
 }

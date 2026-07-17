@@ -62,7 +62,7 @@ async function refresh() {
         render(d.listing ? [d.listing] : []);
         if (!d.listing) {
           empty.hidden = false;
-          empty.innerHTML = `<b class="mono">${esc(d.handle.handle)}</b> is claimed but has no agent attached yet.`;
+          empty.innerHTML = `<b class="mono">${esc(d.card.handle)}</b> is claimed but has no agent attached yet.`;
         }
       } else {
         render([]);
@@ -325,11 +325,14 @@ async function loadShelf() {
   const rows = (d.handles || []).map((h) => `
     <div class="mh-row">
       <span class="mono">${esc(h.handle)}</span>
-      ${h.listing_id ? "" : `<span class="muted">reserved</span>`}
+      ${h.listing_id
+        ? `<span class="muted">${esc(h.bind_method || "bound")}</span>`
+        : `<span class="muted">reserved</span>`}
+      <button class="pair-btn" data-h="${esc(h.handle)}" title="Attach a key-bearing agent by pairing">pair</button>
       <button class="rel" data-h="${esc(h.handle)}">release</button>
     </div>`).join("");
   $("my-handles").innerHTML = rows
-    ? `<div class="mh-head">Your handles</div>${rows}`
+    ? `<div class="mh-head">Your handles</div>${rows}<div id="pair-info" class="claim-msg"></div>`
     : "";
   for (const b of $("my-handles").querySelectorAll(".rel")) {
     b.addEventListener("click", async () => {
@@ -342,8 +345,25 @@ async function loadShelf() {
       refresh();
     });
   }
-  // Attachable agents.
-  const lr = await fetch("/api/listings?limit=100");
+  for (const b of $("my-handles").querySelectorAll(".pair-btn")) {
+    b.addEventListener("click", async () => {
+      const r2 = await fetch("/api/pair/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+        body: JSON.stringify({ handle: b.dataset.h }),
+      });
+      const d2 = await r2.json();
+      const info = $("pair-info");
+      if (!d2.ok) { info.textContent = d2.error; info.classList.add("err"); return; }
+      info.classList.remove("err");
+      info.innerHTML = `Pairing code <b class="mono">${esc(d2.code)}</b> — expires in 10 minutes.<br>
+        Have your agent's host sign <span class="mono">pan-pair-v1:${esc(d2.code)}:&lt;agent-id&gt;</span>
+        and send it to <span class="mono">POST /api/pair/complete</span>. The handle attaches the moment it lands.`;
+    });
+  }
+  // Attachable agents: only listings this email submitted (PAN §4.1) —
+  // key-bearing agents attach via pairing instead.
+  const lr = await fetch("/api/listings/mine", { headers: { Authorization: "Bearer " + session.token } });
   const ld = await lr.json();
   $("claim-attach").innerHTML = `<option value="">reserve name only</option>` +
     (ld.listings || []).map((l) =>

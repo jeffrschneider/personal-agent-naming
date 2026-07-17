@@ -344,8 +344,10 @@ is an address, not a badge.
 ## 11. Reference implementation
 
 The Agent Catalog (this repository) is the reference registrar. At time of
-writing: email-tier claiming, resolution, and the transparency log are
-live; §4 binding rules, §6 hash chaining, the §5.1 card shape, WebFinger,
-and the §3.2 domain tier are in progress in the order listed. The AgentMesh
-Rust SDK carries a standalone pairing signer example demonstrating §4.2
+writing, live and verified end-to-end: email-tier claiming, §4.1/§4.2
+binding (submitter-match and agent-key pairing), §5 resolution (card +
+WebFinger), and the §6 hash-chained, checkpoint-signed transparency log —
+including an independent chain re-verification in a second implementation.
+The §3.2 domain tier is next. The AgentMesh Rust SDK carries
+`examples/pan_pair.rs`, a standalone pairing signer demonstrating §4.2
 without any particular agent host.
