@@ -6,7 +6,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post},
+    routing::get,
     Router,
 };
 use sqlx::PgPool;

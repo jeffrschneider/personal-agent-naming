@@ -5,8 +5,8 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 
 use crate::model::{Listing, SearchQuery, SubmitListing};
 
-/// Connect, retrying briefly — `docker compose up` may still be starting the
-/// database when the server launches.
+/// Connect, retrying briefly — the embedded server may still be settling
+/// when the pool first dials in.
 pub async fn connect_with_retry(url: &str) -> PgPool {
     let mut delay = std::time::Duration::from_millis(250);
     for attempt in 1..=8 {

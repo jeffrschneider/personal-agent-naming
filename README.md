@@ -35,11 +35,16 @@ listening right now."*
 ## Quickstart (dev)
 
 ```
-docker compose up -d      # pinned Postgres 17 + pgvector on :5433, dev creds committed
-cargo run                 # migrates, serves http://localhost:8080
+cargo run                 # serves http://localhost:8080
 ```
 
-No Docker? Any Postgres 15+ works: set `DATABASE_URL` and `cargo run`.
+That's the whole setup. The catalog runs its own embedded PostgreSQL: the
+first run downloads the server binaries and initializes a cluster, both under
+one data root (`CATALOG_DATA_DIR`, default `.data/`); every later run starts
+in seconds. No Docker, no services, no install.
+
+Have your own Postgres 15+? Set `DATABASE_URL` and the embedded server never
+starts — that's also how deployed instances run.
 
 Smoke test:
 
@@ -65,7 +70,7 @@ curl "http://localhost:8080/api/listings?q=echo"
 - **Probe runner** — scheduled "prove it" checks backing verification badges
 - **ARD read interface** — standard-shaped projection of the same listings
 - **A2A card connector** — list anything with an agent card, probe via bridge
-- **Semantic search** — pgvector column per listing (image already ships it)
+- **Semantic search** — pgvector column per listing
 - **Federation** — org instances subscribing to the public catalog
 
 ## Architecture notes
@@ -74,6 +79,6 @@ curl "http://localhost:8080/api/listings?q=echo"
   with filterable columns lifted out; full-text search is a stored tsvector.
 - Presence is a cache, not a record — rebuilt from source networks on restart.
 - Probes are append-only.
-- Dev credentials are committed and dev-only; deployed instances read
-  credentials from the environment. No credential anywhere depends on a
-  human's (or an assistant's) memory.
+- Dev runs an embedded PostgreSQL (localhost-only, dev-only committed
+  credential); deployed instances read `DATABASE_URL` from the environment.
+  No credential anywhere depends on a human's (or an assistant's) memory.

@@ -8,6 +8,7 @@
 //! harvester, probe runner, and ARD read interface build on this.
 
 mod api;
+mod db;
 mod model;
 mod store;
 
@@ -17,12 +18,18 @@ use std::net::SocketAddr;
 async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    // Committed dev default — matches docker-compose.yml. The public instance
-    // overrides via the deployment environment; no credential is ever typed
-    // from memory.
-    let db_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://catalog:catalog_dev@localhost:5433/catalog".to_string());
     let port: u16 = std::env::var("CATALOG_PORT").ok().and_then(|p| p.parse().ok()).unwrap_or(8080);
+
+    // DATABASE_URL points at a deployment's database. Without it, the catalog
+    // runs its own embedded PostgreSQL — no external service, no Docker. The
+    // handle must stay alive: dropping it stops the server.
+    let (_embedded_pg, db_url) = match std::env::var("DATABASE_URL") {
+        Ok(url) => (None, url),
+        Err(_) => {
+            let (pg, url) = db::start_embedded().await;
+            (Some(pg), url)
+        }
+    };
 
     let pool = store::connect_with_retry(&db_url).await;
     store::migrate(&pool).await.expect("migrations failed");
