@@ -9,6 +9,7 @@
 
 mod api;
 mod db;
+mod mesh;
 mod model;
 mod store;
 
@@ -34,6 +35,16 @@ async fn main() {
     let pool = store::connect_with_retry(&db_url).await;
     store::migrate(&pool).await.expect("migrations failed");
     log::info!("[catalog] database ready");
+
+    // Source connectors. AgentMesh is the first; each runs as a background
+    // task feeding the same listings/presence tables the API serves.
+    match mesh::config_from_env() {
+        Some(cfg) => {
+            log::info!("[catalog] AgentMesh connector enabled: {}", cfg.nats_url);
+            tokio::spawn(mesh::run(pool.clone(), cfg));
+        }
+        None => log::info!("[catalog] AgentMesh connector disabled (MESH_NATS_URL not set)"),
+    }
 
     let app = api::router(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

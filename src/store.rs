@@ -79,6 +79,100 @@ pub async fn get(pool: &PgPool, id: uuid::Uuid) -> Result<Option<Listing>, sqlx:
     .await
 }
 
+/// Upsert a connector-harvested listing. (source, source_id) is the
+/// idempotency key — every sweep re-upserts and stays idempotent.
+#[allow(clippy::too_many_arguments)]
+pub async fn upsert_source_listing(
+    pool: &PgPool,
+    source: &str,
+    source_id: &str,
+    name: &str,
+    description: &str,
+    manifest: &serde_json::Value,
+    specialties: &[String],
+    trust: Option<&str>,
+    protocol: &str,
+) -> Result<uuid::Uuid, sqlx::Error> {
+    let (id,): (uuid::Uuid,) = sqlx::query_as(
+        r#"
+        INSERT INTO listings (source, source_id, name, description, manifest, specialties, trust, protocol)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (source, source_id) DO UPDATE SET
+            name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            manifest = EXCLUDED.manifest,
+            specialties = EXCLUDED.specialties,
+            trust = EXCLUDED.trust,
+            protocol = EXCLUDED.protocol,
+            updated_at = now()
+        RETURNING id
+        "#,
+    )
+    .bind(source)
+    .bind(source_id)
+    .bind(name)
+    .bind(description)
+    .bind(manifest)
+    .bind(specialties)
+    .bind(trust)
+    .bind(protocol)
+    .fetch_one(pool)
+    .await?;
+    Ok(id)
+}
+
+/// Set one listing's current presence. Any alive state ('online', 'busy',
+/// 'degraded') refreshes last_seen_at; 'offline'/'unknown' preserve it.
+pub async fn set_presence(
+    pool: &PgPool,
+    listing_id: uuid::Uuid,
+    state: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(
+        r#"
+        INSERT INTO presence (listing_id, state, last_seen_at, updated_at)
+        VALUES ($1, $2, CASE WHEN $2 IN ('online','busy','degraded') THEN now() END, now())
+        ON CONFLICT (listing_id) DO UPDATE SET
+            state = EXCLUDED.state,
+            last_seen_at = CASE WHEN EXCLUDED.state IN ('online','busy','degraded')
+                                THEN now() ELSE presence.last_seen_at END,
+            updated_at = now()
+        "#,
+    )
+    .bind(listing_id)
+    .bind(state)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Fan a node-level presence change out to every listing that node hosts
+/// (mesh presence is node-scoped, §9.6). Returns how many listings updated.
+pub async fn set_presence_by_node(
+    pool: &PgPool,
+    node_id: &str,
+    state: &str,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query(
+        r#"
+        INSERT INTO presence (listing_id, state, last_seen_at, updated_at)
+        SELECT l.id, $2, CASE WHEN $2 IN ('online','busy','degraded') THEN now() END, now()
+        FROM listings l
+        WHERE l.source = 'agentmesh' AND l.manifest->'node'->>'id' = $1
+        ON CONFLICT (listing_id) DO UPDATE SET
+            state = EXCLUDED.state,
+            last_seen_at = CASE WHEN EXCLUDED.state IN ('online','busy','degraded')
+                                THEN now() ELSE presence.last_seen_at END,
+            updated_at = now()
+        "#,
+    )
+    .bind(node_id)
+    .bind(state)
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 /// Upsert a manual submission. (source, source_id) is the idempotency key —
 /// re-submitting updates rather than duplicating.
 pub async fn submit(pool: &PgPool, s: &SubmitListing) -> Result<uuid::Uuid, sqlx::Error> {

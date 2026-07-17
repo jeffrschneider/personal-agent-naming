@@ -5,6 +5,10 @@ edition = "2021"
 description = "Agent Catalog — an ARD-compliant, presence-aware catalog of agents. Indexes, verifies, and shows liveness; never hosts."
 
 [dependencies]
+# AgentMesh connector — sibling checkout of the AgentMesh repo (same
+# convention as the Egg Gateway's dependency on it).
+agentmesh = { path = "../AgentMesh/sdk-rust" }
+
 # HTTP server
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }

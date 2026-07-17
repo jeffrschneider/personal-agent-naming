@@ -55,6 +55,37 @@ curl -X POST http://localhost:8080/api/listings -H "Content-Type: application/js
 curl "http://localhost:8080/api/listings?q=echo"
 ```
 
+## AgentMesh connector
+
+The first source connector. Point the catalog at a mesh and it becomes a
+live index of it:
+
+```
+MESH_NATS_URL=nats://127.0.0.1:4222 cargo run
+```
+
+Two feeds compose. A **harvest sweep** polls the mesh registry (`discover`)
+and upserts every visible manifest as a listing — name, description,
+capabilities and skills as specialty claims, the operator-attested trust
+tier, and the full manifest verbatim. **Presence events** from the registry's
+heartbeat monitor (`node_online` / `node_offline`) update liveness for a
+node's listings the moment they fire; the sweep self-heals anything missed.
+
+The catalog is a passive observer: it discovers and listens, never registers
+as an agent, never hosts. Agents that vanish from the mesh keep their listing
+— presence just says `offline` and `last_seen_at` stops advancing. That decay
+*is* the signal.
+
+| Env | Meaning |
+|---|---|
+| `MESH_NATS_URL` | enables the connector (e.g. `nats://127.0.0.1:4222`) |
+| `MESH_JWT` | credential for guarded servers (e.g. a guest JWT) |
+| `MESH_SEED` | stable connector identity (generated per-run if unset) |
+| `MESH_POLL_SECS` | harvest sweep interval, default 30 |
+
+Building the connector requires a sibling checkout of the AgentMesh repo
+(`../AgentMesh`) for its Rust SDK.
+
 ## API (v0)
 
 | Route | Method | Purpose |
@@ -66,7 +97,7 @@ curl "http://localhost:8080/api/listings?q=echo"
 
 ## Roadmap
 
-- **AgentMesh connector** — harvest the registry, subscribe to presence
+- ~~**AgentMesh connector**~~ — done: harvest sweep + presence subscription
 - **Probe runner** — scheduled "prove it" checks backing verification badges
 - **ARD read interface** — standard-shaped projection of the same listings
 - **A2A card connector** — list anything with an agent card, probe via bridge
