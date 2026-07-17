@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Catalog · A name for your agent</title>
+<meta name="description" content="PAN, Personal Agent Naming: give your AI agent a public name anchored to the email you already own. Claim it in 30 seconds.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📇</text></svg>">
+<link rel="stylesheet" href="/site.css">
+<style>
+  header.hero { padding: 4rem 0 0; }
+  .hero-handle { font-family: var(--mono); font-weight: 600; letter-spacing: -.02em;
+    font-size: clamp(1.35rem, 4.6vw, 3rem); line-height: 1.15; word-break: break-all; }
+  .hero-handle .hname { color: var(--brass); }
+  .hero p.lede { max-width: 54ch; color: var(--muted); font-size: 1.08rem; margin: 1.4rem 0 2rem; }
+
+  .claim-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.4rem 1.5rem; display: grid; gap: 1rem; max-width: 620px; }
+  .cstep { display: grid; gap: .3rem; }
+  .clabel { font-family: var(--mono); font-size: .68rem; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--muted); }
+  .cfield { display: flex; gap: .6rem; }
+  .cinput { flex: 1; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: .55rem .8rem; color: var(--text); font-size: .92rem; min-width: 0; }
+  .cbtn { background: var(--brass); color: #241a06; border: none; border-radius: 8px;
+    padding: .55rem 1rem; font-weight: 650; font-size: .88rem; flex-shrink: 0; }
+  .chint { color: var(--muted); font-size: .8rem; }
+  .cpreview { font-family: var(--mono); font-size: .88rem; color: var(--brass); }
+  .cpreview .ok { color: var(--green); font-family: var(--sans); font-size: .8rem; }
+  .claim-note { color: var(--muted); font-size: .8rem; max-width: 620px; margin-top: .8rem; }
+
+  .shelf-head { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap;
+    margin: 1.4rem 0 .8rem; font-family: var(--mono); font-size: .78rem; }
+  .tally { color: var(--text); font-weight: 600; }
+  .tally .n { color: var(--green); }
+  .shelf-note { color: var(--muted); margin-left: auto; }
+  .shelf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .7rem; }
+  .mini-card { position: relative; overflow: hidden; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 10px; padding: .7rem .85rem .7rem 1rem;
+    transition: opacity .6s ease; }
+  .mini-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--grey); opacity: .35; transition: all .6s ease; }
+  .mini-card.online::before { background: var(--green); opacity: 1;
+    box-shadow: 0 0 9px color-mix(in srgb, var(--green) 60%, transparent); }
+  .mini-card.offline { opacity: .55; }
+  .mc-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .mc-name { font-family: var(--mono); font-weight: 600; font-size: .74rem; letter-spacing: -.01em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mc-name .hname { color: var(--brass); }
+  .mc-claim { font-family: var(--mono); font-size: .68rem; color: var(--muted); margin-top: .35rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="/">Agent<span>Catalog</span></a>
+    <span class="links">
+      <a href="/standard.html">The standard</a>
+      <a href="/developers.html">For developers</a>
+      <a href="/spec">The spec</a>
+      <a href="https://agent-catalog-68925516043.us-central1.run.app/">The shelf</a>
+    </span>
+  </nav>
+
+  <header class="hero">
+    <div class="eyebrow">A name for your agent</div>
+    <div class="hero-handle"><span class="hname">Coder</span>.<span id="hero-you">you@gmail.com</span></div>
+    <p class="lede">
+      Your agent works for you every day and has no name anyone else can use.
+      PAN, Personal Agent Naming, fixes that: one unique string, anchored to
+      the email you already own. Claim it in 30 seconds. Put it in your email
+      signature.
+    </p>
+    <div class="cta-row">
+      <a class="btn" href="https://agent-catalog-68925516043.us-central1.run.app/">Claim your agent's name</a>
+      <a class="btn ghost" href="/standard.html">How it works</a>
+    </div>
+    <div class="fine">Free. No account beyond your inbox. The registrar indexes and verifies; it never hosts your agent.</div>
+  </header>
+
+  <section id="claim">
+    <div class="sec-eyebrow">Thirty seconds, timed</div>
+    <h2>Claiming looks like this.</h2>
+    <div class="claim-box" aria-label="The claim flow, illustrated">
+      <div class="cstep">
+        <span class="clabel">1 · The email you already own</span>
+        <div class="cfield"><input class="cinput" value="you@gmail.com" readonly><button class="cbtn" tabindex="-1">Send code</button></div>
+        <span class="chint">This is the anchor. Whoever controls this inbox controls the handles under it.</span>
+      </div>
+      <div class="cstep">
+        <span class="clabel">2 · Six digits, from your inbox</span>
+        <div class="cfield"><input class="cinput mono" value="4 8 2 9 1 7" readonly><button class="cbtn" tabindex="-1">Verify</button></div>
+        <span class="chint">Expires in 15 minutes. That one verification is all the registrar ever asks of you.</span>
+      </div>
+      <div class="cstep">
+        <span class="clabel">3 · Name your agent</span>
+        <div class="cfield"><input class="cinput" value="Coder" readonly><button class="cbtn" tabindex="-1">Claim</button></div>
+        <div class="cpreview">Coder.you@gmail.com <span class="ok">✓ available</span></div>
+        <span class="chint">Any name up to 64 characters. Dots allowed. First come, first served, across the whole registry.</span>
+      </div>
+    </div>
+    <div class="claim-note">
+      Illustration; the real flow runs on
+      <a href="https://agent-catalog-68925516043.us-central1.run.app/">the live registrar</a>.
+      Have a domain? There's a second tier, <span class="mono">Coder@yourdomain.com</span>,
+      claimed by publishing one file or one DNS record that anyone on the
+      internet can re-verify without trusting us.
+      <a href="/standard.html">Details on the standard page.</a>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-eyebrow">The audience nobody serves</div>
+    <h2>The most numerous agents on earth are anonymous.</h2>
+    <p class="sec-lede">
+      Count the agents that actually exist. Not the demo bots, not the
+      enterprise pilots: the personal agents. Claude Code and Codex sessions
+      running in terminals. OpenClaw and Hermes assistants living on
+      gateways. The agent that reads your mail, the one that watches your
+      builds. They outnumber every other kind of agent by orders of
+      magnitude. And not one of them has a name you can hand to another
+      person. Every existing directory was built for the other agents. PAN
+      starts from what personal-agent owners actually have: an email address.
+    </p>
+    <div class="pull">Your agent gets a name you can put in an email signature,
+      say in a meeting, or paste into another agent's config.</div>
+  </section>
+
+  <section>
+    <div class="sec-eyebrow">Names that answer</div>
+    <h2>Live agents only.</h2>
+    <p class="sec-lede">
+      A name is only half of trust. The other half is whether anything
+      answers when you use it. Where the Catalog observes liveness, presence
+      is printed on the card: online, last seen 47 minutes ago, dark for a
+      month. Watch the shelf: listings that stop responding visibly decay,
+      and the decay is the signal. Every other directory is a phone book
+      nobody answers. Here, a stale card looks stale.
+    </p>
+    <div class="shelf-head">
+      <span class="tally"><span class="n" id="n-online">5</span>/<span id="n-total">8</span> listening now</span>
+      <span class="shelf-note">simulated shelf; the real one is the live registrar</span>
+    </div>
+    <div class="shelf-grid" id="shelf"></div>
+    <pre style="margin-top:1.2rem"><span class="c"># resolve a handle, presence included</span>
+curl "https://agentcatalog.com/api/resolve?<span class="b">handle=PublicAgent.you@gmail.com</span>"</pre>
+  </section>
+
+  <div class="eco">
+    <b>ARD</b> finds · <b>A2A</b> talks · <b>AgentMesh</b> connects ·
+    <span class="us">PAN names</span>
+  </div>
+
+  <footer>
+    <span>Agent Catalog</span>
+    <a href="/spec">The spec</a>
+    <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub</a>
+    <a href="https://agentmesh.ai">AgentMesh</a>
+    <span style="margin-left:auto">Reference registrar for PAN v0.2-draft</span>
+  </footer>
+</div>
+
+<script>
+  const YOUS = ["you@gmail.com", "maria.lopez@outlook.com", "dev@fastmail.com", "jeff.r@icloud.com"];
+  let yi = 0;
+  const heroYou = document.getElementById("hero-you");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduced) setInterval(() => { yi = (yi + 1) % YOUS.length; heroYou.textContent = YOUS[yi]; }, 2600);
+
+  const AGENTS = [
+    { h: ["Translator", "maria@gmail.com"],   claim: "skill:translate",     on: true  },
+    { h: ["HubSpotBridge", "ops@acme.com"],   claim: "access:hubspot-api",  on: true  },
+    { h: ["CI.Doctor", "dev@fastmail.com"],   claim: "runtime:build-fixer", on: false },
+    { h: ["PaperScout", "lin@outlook.com"],   claim: "skill:arxiv-digest",  on: true  },
+    { h: ["QuoteBidder", "sales@acme.com"],   claim: "skill:quote",         on: true  },
+    { h: ["Echo", "test@example.com"],        claim: "runtime:test",        on: false },
+    { h: ["Calendar.Clerk", "jo@icloud.com"], claim: "access:gcal",         on: true  },
+    { h: ["NightAuditor", "it@plexo.io"],     claim: "runtime:log-watch",   on: false },
+  ];
+  AGENTS[2].off = Date.now() - 47 * 60000;
+  AGENTS[7].off = Date.now() - 26 * 3600000;
+  const shelf = document.getElementById("shelf");
+  function ago(t) {
+    if (t == null) return "no signal";
+    const m = Math.max(1, Math.round((Date.now() - t) / 60000));
+    return m < 60 ? `seen ${m}m ago` : `seen ${Math.round(m / 60)}h ago`;
+  }
+  function render() {
+    shelf.innerHTML = AGENTS.map((a) => `
+      <div class="mini-card ${a.on ? "online" : "offline"}">
+        <div class="mc-row">
+          <span class="mc-name"><span class="hname">${a.h[0]}</span>.${a.h[1]}</span>
+          <span class="pill ${a.on ? "online" : ""}"><span class="dot"></span>${a.on ? "online" : ago(a.off)}</span>
+        </div>
+        <div class="mc-claim">${a.claim}</div>
+      </div>`).join("");
+    document.getElementById("n-online").textContent = AGENTS.filter(a => a.on).length;
+    document.getElementById("n-total").textContent = AGENTS.length;
+  }
+  render();
+  if (!reduced) {
+    setInterval(() => {
+      const i = Math.floor(Math.random() * AGENTS.length);
+      AGENTS[i].on = !AGENTS[i].on;
+      if (!AGENTS[i].on) AGENTS[i].off = Date.now();
+      render();
+    }, 3200);
+  }
+</script>
+</body>
+</html>
