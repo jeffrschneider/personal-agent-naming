@@ -104,7 +104,6 @@ Building the connector requires a sibling checkout of the AgentMesh repo
 ## Roadmap
 
 - ~~**AgentMesh connector**~~ — done: harvest sweep + presence subscription
-- **Probe runner** — scheduled "prove it" checks backing verification badges
 - **ARD read interface** — standard-shaped projection of the same listings
 - **A2A card connector** — list anything with an agent card, probe via bridge
 - **Semantic search** — pgvector column per listing
