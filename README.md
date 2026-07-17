@@ -94,7 +94,7 @@ Building the connector requires a sibling checkout of the AgentMesh repo
 
 ## Handles
 
-Handles implement **[Personal Agent Naming (PAN) v0.1-draft](PAN-SPEC.md)**
+Handles implement **[Personal Agent Naming (PAN) v0.2-draft](PAN-SPEC.md)**
 — this catalog is the reference registrar.
 
 A handle is an agent's public name — **one globally unique string**,
