@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The standard · Agent Catalog</title>
-<meta name="description" content="PAN, Personal Agent Naming: two anchor tiers, two rules, cryptographic pairing, and an honest trust model.">
+<meta name="description" content="PAN, Personal Agent Naming: one unique string anchored to your email, paired to your agent with one signature.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📇</text></svg>">
 <link rel="stylesheet" href="/site.css">
 </head>
@@ -25,99 +25,58 @@
     <div class="eyebrow">A draft standard, running</div>
     <h1 class="page">PAN: Personal Agent Naming.</h1>
     <p class="sec-lede">
-      PAN deliberately does one thing. It names agents, binds names to them,
-      and defines what a resolved name returns. It does not carry messages,
-      does not grade capabilities, and does not host anything.
+      PAN does one thing: it gives an agent a name. One unique string,
+      anchored to the email you already own, claimed with a verification
+      code. It does not carry messages, does not grade capabilities, and
+      does not host anything.
     </p>
-    <pre><span class="c">email tier:</span>   PublicAgent.jeffrschneider@gmail.com   <span class="c">anchored to an inbox, notarized once</span>
-<span class="c">domain tier:</span>  PublicAgent@jeffschneider.com          <span class="c">anchored to a domain, re-verifiable by anyone</span></pre>
+    <pre>PublicAgent.jeffrschneider@gmail.com</pre>
     <div class="rules">
       <div class="rule">
-        <h3>Rule 1: nobody parses handles.</h3>
-        <p>A handle is an opaque key. Resolution is exact-string lookup of the
-        whole thing. No consumer decomposes it, ever, which is why the grammar
-        stays this simple and the two tiers coexist without ceremony.</p>
+        <h3>Nobody parses handles.</h3>
+        <p>A handle is one opaque string. Looking one up means matching the
+        whole thing, never taking it apart. That's why any name works, dots
+        and all.</p>
       </div>
       <div class="rule">
-        <h3>Rule 2: one string, one owner.</h3>
-        <p>Uniqueness is full-string, first come first served, across both
-        tiers. Second claimant hears "taken." Released handles sit in a 90-day
-        cooling-off so a name you wrote down last year never silently starts
-        pointing at a stranger.</p>
+        <h3>One string, one owner.</h3>
+        <p>First come, first served. Released names sit out 90 days, so a
+        handle you wrote down last year never quietly becomes someone
+        else's.</p>
       </div>
     </div>
-  </section>
-
-  <section>
-    <div class="sec-eyebrow">The domain tier</div>
-    <h2>Own a domain? Skip the notary.</h2>
-    <p class="sec-lede">
-      Publish one file at <span class="mono">https://yourdomain.com/.well-known/pan.json</span>
-      (or one DNS TXT record at <span class="mono">_pan.yourdomain.com</span>)
-      naming your agents. That record is the claim, the proof, and the
-      binding in one: the registrar mirrors it, re-checks it daily, and
-      anyone on the internet can re-verify it without trusting anybody.
-      If the record disappears, the card says stale instead of pretending.
-    </p>
-    <pre>{
-  "version": "pan-0.2",
-  "handles": [
-    { "name": "PublicAgent", "key": "UD653KLV…" }
-  ]
-}</pre>
   </section>
 
   <section>
     <div class="sec-eyebrow">Not just claimed. Bound.</div>
-    <h2>Anyone can claim a name. Pairing proves it's your agent's.</h2>
+    <h2>Pairing proves the name points at your real agent.</h2>
     <p class="sec-lede">
-      Owning a name and operating an agent are different proofs, and PAN
-      refuses to blur them. For agents that carry a key, binding works like
-      pairing a Bluetooth device:
+      Claiming a name takes an email. Attaching it to an agent takes more:
+      the registrar gives you a short pairing code, and whatever software
+      runs your agent signs it with the agent's own key. Code proves it's
+      your name; signature proves it's your agent. Both, or no binding.
+      Any runtime can do this; the spec forbids requiring a particular one.
     </p>
-    <ol class="steps">
-      <li><b>You ask for a pairing code.</b> The registrar issues a short
-        single-use code, <span class="mono">KX4-92F</span>, good for ten minutes.</li>
-      <li><b>Your agent signs one string.</b> Whatever software holds the
-        agent's private key (a gateway, a daemon, a five-line script) signs
-        <span class="mono">pan-pair-v1:KX4-92F:&lt;agent-id&gt;</span>.</li>
-      <li><b>The signature comes back.</b> The code proves the handle owner
-        started this; the signature proves agent control. The binding is the
-        intersection of the two proofs, and it's logged with its method.</li>
-    </ol>
-    <div class="callout">
-      <b>Host neutrality is normative in the spec</b>, not a marketing
-      promise. The registrar may not require any particular framework,
-      network, or vendor for pairing. If a listing declares a key, whoever
-      holds that key can pair, from any runtime.
-    </div>
   </section>
 
   <section>
-    <div class="sec-eyebrow">Read this before trusting a handle</div>
-    <h2>The registrar is a notary, not an oracle.</h2>
+    <div class="sec-eyebrow">Honest limits</div>
+    <h2>A handle is an address, not a badge.</h2>
     <p class="sec-lede">
-      For email-tier handles, here is exactly what happened: the registrar
-      watched someone prove control of an inbox, once. If you trust an
-      email-tier handle, you are trusting the registrar's word. So the
-      registrar's word is kept in public: every claim, binding, and release
-      appends to a hash-chained transparency log with signed checkpoints.
-      Anyone can mirror it, recompute the chain, and catch a rewrite.
-      Domain-tier handles remove the notary entirely: the proof lives at your
-      domain, and anyone can re-fetch it, today and every day after.
+      A handle proves who claimed a name and, when paired, that they control
+      the agent behind it. It does not prove the agent is competent, safe,
+      or endorsed by anyone. And every claim the registrar records goes into
+      a public, tamper-evident log, so you never have to take the
+      registrar's word for its own history.
     </p>
-    <b>What a handle does not prove, at any tier:</b>
-    <ul class="notlist">
-      <li>that the agent is competent</li>
-      <li>that the agent is safe</li>
-      <li>that anyone endorses it</li>
-      <li>that its capability claims are true</li>
-    </ul>
-    <p style="margin-top:1rem"><b>A handle is an address, not a badge.</b></p>
   </section>
 
   <section>
-    <a class="btn ghost" href="/spec">Read the full spec</a>
+    <p class="sec-lede">
+      The full protocol, including domain-anchored handles for people who
+      run their own domains, lives in the spec. It reads in ten minutes.
+    </p>
+    <a class="btn" href="/spec">Read the spec</a>
   </section>
 
   <div class="eco">
