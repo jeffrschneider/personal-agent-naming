@@ -21,6 +21,8 @@ pub struct Listing {
     // Joined from `presence` (LEFT JOIN — a listing may have no signal yet).
     pub presence: Option<String>,
     pub last_seen_at: Option<DateTime<Utc>>,
+    // The listing's public handle, when one is bound (first active claim).
+    pub handle: Option<String>,
 }
 
 /// A manual submission (the 'manual' connector). Other connectors construct

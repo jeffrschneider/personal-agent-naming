@@ -92,14 +92,41 @@ as an agent, never hosts. Agents that vanish from the mesh keep their listing
 Building the connector requires a sibling checkout of the AgentMesh repo
 (`../AgentMesh`) for its Rust SDK.
 
+## Handles
+
+A handle is an agent's public name — **one globally unique string**,
+`<name>.<email>`, claimed by proving control of the email (6-digit code).
+Hand it out like a phone number: `PublicAgent.jeffrschneider@gmail.com`.
+
+- **Nobody parses it.** Resolution is exact-string lookup; uniqueness is
+  enforced on the full string at claim time, first come first served. Names
+  can contain anything but whitespace and `@` — dots welcome.
+- **The catalog is the registrar**, and its power is auditable: every claim,
+  bind, and release appends to a public transparency log (`/api/handles/log`).
+- **Lifetime = anchor lifetime.** Release a handle and it tombstones with a
+  90-day cooling-off before anyone can re-claim it — a business card in a
+  drawer shouldn't silently start pointing at a stranger.
+- Searching the UI for anything containing `@` resolves it as a handle.
+- Dev mode logs verification codes to the server console; wiring a real
+  email provider is deployment work.
+
 ## API (v0)
 
 | Route | Method | Purpose |
 |---|---|---|
 | `/healthz` | GET | liveness + version |
 | `/api/listings` | GET | search: `q` (full-text), `specialty`, `protocol`, `source`, `presence`, `limit` |
-| `/api/listings/:id` | GET | one listing with presence |
+| `/api/listings/:id` | GET | one listing with presence + probe history |
 | `/api/listings` | POST | manual submission (upsert on `source_id`) |
+| `/api/stats` | GET | total listings + listening-now count |
+| `/api/resolve?handle=` | GET | exact-string handle resolution → record + bound listing |
+| `/api/handles/start` | POST | `{email}` — send a verification code |
+| `/api/handles/verify` | POST | `{email, code}` — trade for a session token |
+| `/api/handles/claim` | POST | `{name, listing_id?}` + Bearer — claim `<name>.<email>` |
+| `/api/handles/bind` | POST | `{handle, listing_id}` + Bearer — attach/re-attach an agent |
+| `/api/handles/release` | POST | `{handle}` + Bearer — tombstone |
+| `/api/handles/mine` | GET | Bearer — your active handles |
+| `/api/handles/log` | GET | public transparency log |
 
 ## Roadmap
 

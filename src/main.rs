@@ -11,6 +11,7 @@ mod api;
 mod db;
 mod mesh;
 mod model;
+mod registrar;
 mod store;
 
 use std::net::SocketAddr;

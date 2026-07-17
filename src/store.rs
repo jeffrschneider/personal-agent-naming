@@ -37,7 +37,10 @@ pub async fn search(pool: &PgPool, q: &SearchQuery) -> Result<Vec<Listing>, sqlx
         r#"
         SELECT l.id, l.source, l.source_id, l.name, l.description, l.manifest,
                l.specialties, l.protocol, l.trust, l.created_at, l.updated_at,
-               p.state AS presence, p.last_seen_at
+               p.state AS presence, p.last_seen_at,
+               (SELECT h.handle FROM handles h
+                WHERE h.listing_id = l.id AND h.released_at IS NULL
+                ORDER BY h.created_at LIMIT 1) AS handle
         FROM listings l
         LEFT JOIN presence p ON p.listing_id = l.id
         WHERE ($1::text IS NULL OR l.search @@ websearch_to_tsquery('english', $1))
@@ -68,7 +71,10 @@ pub async fn get(pool: &PgPool, id: uuid::Uuid) -> Result<Option<Listing>, sqlx:
         r#"
         SELECT l.id, l.source, l.source_id, l.name, l.description, l.manifest,
                l.specialties, l.protocol, l.trust, l.created_at, l.updated_at,
-               p.state AS presence, p.last_seen_at
+               p.state AS presence, p.last_seen_at,
+               (SELECT h.handle FROM handles h
+                WHERE h.listing_id = l.id AND h.released_at IS NULL
+                ORDER BY h.created_at LIMIT 1) AS handle
         FROM listings l
         LEFT JOIN presence p ON p.listing_id = l.id
         WHERE l.id = $1

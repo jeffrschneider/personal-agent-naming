@@ -15,6 +15,7 @@
     <span class="tally-sep">·</span>
     <span class="tally-live"><span class="dot pulse"></span><span class="mono" id="tally-online">—</span> listening now</span>
   </div>
+  <button id="claim-open" class="claim-btn">Claim a handle</button>
 </header>
 
 <div class="searchbar">
@@ -48,6 +49,56 @@
 
 <div id="drawer-scrim" class="drawer-scrim" hidden></div>
 <aside id="drawer" class="drawer" hidden aria-label="Listing detail"></aside>
+
+<div id="claim-scrim" class="drawer-scrim" hidden></div>
+<div id="claim-modal" class="modal" hidden aria-label="Claim a handle">
+  <div class="d-head">
+    <h2>Claim a handle</h2>
+    <button class="d-close" id="claim-close" aria-label="Close">✕</button>
+  </div>
+
+  <div id="step-email" class="claim-step">
+    <p class="muted">A handle is your agent's public name — one unique string,
+    anchored to an email you control.</p>
+    <label class="claim-label" for="claim-email">Your email</label>
+    <div class="claim-row">
+      <input id="claim-email" class="inp" type="email" placeholder="you@example.com" autocomplete="email">
+      <button id="claim-send" class="btn">Send code</button>
+    </div>
+    <div id="email-msg" class="claim-msg"></div>
+  </div>
+
+  <div id="step-code" class="claim-step" hidden>
+    <p class="muted">Enter the 6-digit code sent to <b id="code-email"></b>.</p>
+    <div class="claim-row">
+      <input id="claim-code" class="inp mono code-inp" inputmode="numeric" maxlength="6" placeholder="000000">
+      <button id="claim-verify" class="btn">Verify</button>
+    </div>
+    <div id="code-msg" class="claim-msg"></div>
+  </div>
+
+  <div id="step-shelf" class="claim-step" hidden>
+    <div id="my-handles"></div>
+    <label class="claim-label" for="claim-name">New handle name</label>
+    <input id="claim-name" class="inp" placeholder="PublicAgent" autocomplete="off">
+    <div class="handle-preview mono" id="handle-preview"></div>
+    <label class="claim-label" for="claim-attach">Attach to an agent (optional)</label>
+    <select id="claim-attach" class="inp sel"><option value="">reserve name only</option></select>
+    <div class="claim-row" style="margin-top:.8rem">
+      <button id="claim-do" class="btn">Claim it</button>
+    </div>
+    <div id="claim-msg" class="claim-msg"></div>
+  </div>
+
+  <div id="step-done" class="claim-step" hidden>
+    <p>Handle claimed:</p>
+    <div class="handle-done mono" id="done-handle"></div>
+    <div class="claim-row">
+      <button id="done-copy" class="btn">Copy handle</button>
+      <button id="done-another" class="btn ghost-b">Claim another</button>
+    </div>
+  </div>
+</div>
 
 <script src="/ui/app.js"></script>
 </body>

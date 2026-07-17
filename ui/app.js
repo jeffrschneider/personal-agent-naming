@@ -54,12 +54,37 @@ function query() {
 
 async function refresh() {
   try {
+    // A query containing '@' is a handle — exact-string lookup, no parsing.
+    if (state.q.includes("@")) {
+      const r = await fetch("/api/resolve?handle=" + encodeURIComponent(state.q));
+      if (r.ok) {
+        const d = await r.json();
+        render(d.listing ? [d.listing] : []);
+        if (!d.listing) {
+          empty.hidden = false;
+          empty.innerHTML = `<b class="mono">${esc(d.handle.handle)}</b> is claimed but has no agent attached yet.`;
+        }
+      } else {
+        render([]);
+        empty.hidden = false;
+        empty.textContent = "No agent by that name.";
+      }
+      return;
+    }
     const r = await fetch("/api/listings?" + query());
     const d = await r.json();
     render(d.listings || []);
   } catch (e) {
     console.log("[catalog:ui] search fetch failed", e);
   }
+}
+
+function copyText(t, el) {
+  navigator.clipboard.writeText(t).then(() => {
+    const prev = el.textContent;
+    el.textContent = "Copied";
+    setTimeout(() => { el.textContent = prev; }, 1200);
+  }).catch((e) => console.log("[catalog:ui] copy failed", e));
 }
 
 function render(listings) {
@@ -82,6 +107,12 @@ function render(listings) {
       refresh();
     });
   }
+  for (const el of grid.querySelectorAll(".handle-chip")) {
+    el.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      copyText(el.dataset.handle, el);
+    });
+  }
 }
 
 function presencePill(p) {
@@ -97,6 +128,9 @@ function card(l) {
   const more = (l.specialties || []).length > 5 ? `<span class="muted">+${l.specialties.length - 5}</span>` : "";
   const seen = st !== "online" && l.last_seen_at ? `<span>last seen ${ago(l.last_seen_at)}</span>` : "";
   const trust = l.trust ? `<span class="seal ${l.trust === "verified" ? "good" : ""}">${esc(l.trust)}</span>` : "";
+  const handle = l.handle
+    ? `<div><span class="handle-chip" data-handle="${esc(l.handle)}" title="Copy handle">${esc(l.handle)}</span></div>`
+    : "";
   return `
   <article class="agent-card ${esc(st)}" data-id="${esc(l.id)}" tabindex="0" role="button">
     <div class="ac-head">
@@ -105,6 +139,7 @@ function card(l) {
     </div>
     <div class="ac-desc">${esc(l.description || "")}</div>
     <div class="ac-chips">${chips}${more}</div>
+    ${handle}
     <div class="ac-foot">
       <span class="node-badge">${esc(l.source)}</span>
       ${trust}
@@ -165,6 +200,10 @@ async function openDrawer(id) {
       ${l.presence !== "online" && l.last_seen_at ? `<span class="muted"> last seen ${ago(l.last_seen_at)}</span>` : ""}
     </div>
     <div>${esc(l.description || "")}</div>
+    ${l.handle ? `
+    <div class="d-section"><h3>Handle</h3>
+      <span class="handle-chip" id="d-handle" data-handle="${esc(l.handle)}" title="Copy handle">${esc(l.handle)}</span>
+    </div>` : ""}
 
     <div class="d-section"><h3>Verification</h3>
       ${probes || `<div class="muted">No probe checks yet — claims below are as asserted by the source.</div>`}
@@ -190,6 +229,8 @@ async function openDrawer(id) {
   drawer.hidden = false;
   scrim.hidden = false;
   $("d-close").addEventListener("click", closeDrawer);
+  const dh = $("d-handle");
+  if (dh) dh.addEventListener("click", () => copyText(dh.dataset.handle, dh));
   // Listing pages are shareable: ?open=<id> deep-links straight to this drawer.
   const url = new URL(location);
   url.searchParams.set("open", id);
@@ -204,7 +245,9 @@ function closeDrawer() {
   history.replaceState(null, "", url);
 }
 scrim.addEventListener("click", closeDrawer);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { closeDrawer(); closeClaim(); }
+});
 
 // ── wiring ────────────────────────────────────────────────────────────────
 let debounce;
@@ -219,6 +262,125 @@ $("live-toggle").addEventListener("click", (e) => {
 });
 $("source").addEventListener("change", (e) => { state.source = e.target.value; refresh(); });
 $("protocol").addEventListener("change", (e) => { state.protocol = e.target.value; refresh(); });
+
+// ── claim a handle ────────────────────────────────────────────────────────
+const claimModal = $("claim-modal"), claimScrim = $("claim-scrim");
+let session = null; // { token, email }
+
+function showStep(id) {
+  for (const s of claimModal.querySelectorAll(".claim-step")) s.hidden = s.id !== id;
+}
+function claimMsg(id, text, isErr) {
+  const el = $(id);
+  el.textContent = text || "";
+  el.classList.toggle("err", !!isErr);
+}
+function openClaim() {
+  claimModal.hidden = false;
+  claimScrim.hidden = false;
+  showStep(session ? "step-shelf" : "step-email");
+  if (session) loadShelf();
+}
+function closeClaim() { claimModal.hidden = true; claimScrim.hidden = true; }
+$("claim-open").addEventListener("click", openClaim);
+$("claim-close").addEventListener("click", closeClaim);
+claimScrim.addEventListener("click", closeClaim);
+
+$("claim-send").addEventListener("click", async () => {
+  const email = $("claim-email").value.trim();
+  claimMsg("email-msg", "Sending…");
+  const r = await fetch("/api/handles/start", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const d = await r.json();
+  if (!d.ok) { claimMsg("email-msg", d.error, true); return; }
+  $("code-email").textContent = d.email;
+  showStep("step-code");
+  claimMsg("code-msg", d.delivery === "console"
+    ? "Dev mode: the code is in the catalog server's console log."
+    : "Check your inbox.");
+  $("claim-code").focus();
+});
+
+$("claim-verify").addEventListener("click", async () => {
+  const email = $("code-email").textContent;
+  const code = $("claim-code").value.trim();
+  const r = await fetch("/api/handles/verify", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+  const d = await r.json();
+  if (!d.ok) { claimMsg("code-msg", d.error, true); return; }
+  session = { token: d.token, email };
+  showStep("step-shelf");
+  loadShelf();
+});
+
+async function loadShelf() {
+  // Existing handles under this email.
+  const r = await fetch("/api/handles/mine", { headers: { Authorization: "Bearer " + session.token } });
+  const d = await r.json();
+  if (r.status === 401) { session = null; showStep("step-email"); return; }
+  const rows = (d.handles || []).map((h) => `
+    <div class="mh-row">
+      <span class="mono">${esc(h.handle)}</span>
+      ${h.listing_id ? "" : `<span class="muted">reserved</span>`}
+      <button class="rel" data-h="${esc(h.handle)}">release</button>
+    </div>`).join("");
+  $("my-handles").innerHTML = rows
+    ? `<div class="mh-head">Your handles</div>${rows}`
+    : "";
+  for (const b of $("my-handles").querySelectorAll(".rel")) {
+    b.addEventListener("click", async () => {
+      await fetch("/api/handles/release", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+        body: JSON.stringify({ handle: b.dataset.h }),
+      });
+      loadShelf();
+      refresh();
+    });
+  }
+  // Attachable agents.
+  const lr = await fetch("/api/listings?limit=100");
+  const ld = await lr.json();
+  $("claim-attach").innerHTML = `<option value="">reserve name only</option>` +
+    (ld.listings || []).map((l) =>
+      `<option value="${esc(l.id)}">${esc(l.name)} (${esc(l.source)})</option>`).join("");
+  updatePreview();
+}
+
+function updatePreview() {
+  const name = $("claim-name").value.trim();
+  $("handle-preview").textContent = name && session ? `${name}.${session.email}` : "";
+}
+$("claim-name").addEventListener("input", updatePreview);
+
+$("claim-do").addEventListener("click", async () => {
+  const name = $("claim-name").value.trim();
+  const listing_id = $("claim-attach").value || null;
+  claimMsg("claim-msg", "Claiming…");
+  const r = await fetch("/api/handles/claim", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+    body: JSON.stringify({ name, listing_id }),
+  });
+  const d = await r.json();
+  if (r.status === 401) { session = null; showStep("step-email"); return; }
+  if (!d.ok) { claimMsg("claim-msg", d.error, true); return; }
+  $("done-handle").textContent = d.handle;
+  showStep("step-done");
+  refresh();
+});
+
+$("done-copy").addEventListener("click", (e) =>
+  copyText($("done-handle").textContent, e.currentTarget));
+$("done-another").addEventListener("click", () => {
+  $("claim-name").value = "";
+  showStep("step-shelf");
+  loadShelf();
+});
 
 refreshStats();
 refresh();
