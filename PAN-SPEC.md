@@ -248,16 +248,22 @@ GET /.well-known/webfinger?resource=acct:PublicAgent@jeffschneider.com
 so that two decades of existing `acct:` tooling resolves handles with no
 PAN-specific code.
 
-## 6. The transparency log
+## 6. The history log
 
 Every claim, binding (with its proof method), release, staleness
 transition, and refused conflict appends an entry. Entries are never
-updated or deleted, and the log is publicly readable.
+updated or deleted.
+
+**The log is not public.** Email-tier handles embed the owner's address in
+the name, so a world-readable log would let anyone enumerate an owner's
+entire roster by filtering on their email. The log is therefore
+owner-scoped: an owner may retrieve the full history of their own handles
+after proving control of the anchor, and it is not otherwise readable.
 
 **Hash chaining is REQUIRED.** Each entry carries the SHA-256 hash of the
 previous entry, computed over a canonical serialization that includes that
-previous hash, so the log is a chain and any rewrite of history breaks
-every subsequent link:
+previous hash, so the log is a chain and any rewrite of history is
+detectable:
 
 ```json
 { "seq": 1041, "at": "…", "action": "bound", "handle": "…",
@@ -265,13 +271,9 @@ every subsequent link:
   "prev_hash": "b64…", "entry_hash": "b64…" }
 ```
 
-**Signed checkpoints are REQUIRED.** The registrar holds an Ed25519 signing
-key and periodically publishes a checkpoint: a signature over
-`(seq, entry_hash, timestamp)` of the latest entry. A mirror that replays
-the log, recomputes the chain, and checks the checkpoint detects tampering
-without trusting the registrar. Merkle inclusion proofs (RFC 9162 / SCITT)
-are a future refinement; the chain format is designed so they can be added
-without breaking existing entries.
+Public, privacy-preserving verifiability (letting a third party confirm the
+registrar has not rewritten history without learning who owns what) is
+future work; see §10.
 
 ## 7. Registrar obligations
 
@@ -280,7 +282,8 @@ A conforming registrar:
 1. Enforces full-string uniqueness across tiers and the cooling-off window.
 2. Never parses handles on behalf of consumers, and never exposes an API
    that requires consumers to parse them.
-3. Maintains the hash-chained, checkpoint-signed transparency log of §6.
+3. Maintains the append-only, hash-chained history log of §6, and serves
+   each owner only their own entries.
 4. Serves resolution without authentication, and labels every card with its
    anchor tier and binding method.
 5. Re-verifies domain records on schedule and surfaces staleness honestly.
@@ -298,10 +301,13 @@ Trust in PAN has two independent axes:
 
 **For email anchors the registrar is a notary, not an oracle.** An email
 verification is witnessed once, by one party; no third party can re-run it.
-Everyone who trusts an email-tier handle is trusting the registrar's word,
-disciplined by the transparency log: a registrar that rewrites history
-breaks its own hash chain in public. **Domain anchors remove the notary**:
-the proof lives at the domain and anyone can check it.
+Everyone who trusts an email-tier handle is trusting the registrar's word.
+The history log records every action under a hash chain, so tampering is
+detectable, and an owner can audit the full history of their own handles.
+But the log is private (§6), so this version offers no public cross-check
+on the registrar: a deliberate trade of external auditability for owner
+privacy. **Domain anchors remove the notary**: the proof lives at the
+domain and anyone can fetch it.
 
 What a handle does **not** prove, at any tier: that the agent is competent,
 safe, endorsed by anyone, or that its capability claims are true. A handle
@@ -336,7 +342,10 @@ is an address, not a badge.
 - **Federation**: multiple registrars, referral resolution, cross-registrar
   uniqueness.
 - **Additional anchor proofs**: e.g. OIDC sign-in as a mailbox proof.
-- **Merkle/SCITT log upgrades**: inclusion proofs atop the §6 chain.
+- **Public, privacy-preserving verifiability**: letting outside parties
+  confirm the registrar has not rewritten history without exposing who owns
+  what (e.g. Merkle commitments / SCITT-style inclusion proofs over the §6
+  chain).
 - **Reachability and messaging**: contacting a resolved agent, including
   any registrar-hosted chat or relay surface, belongs to the messaging
   protocols named in the card's endpoints.
@@ -346,8 +355,7 @@ is an address, not a badge.
 The Agent Catalog (this repository) is the reference registrar. At time of
 writing, live and verified end-to-end: email-tier claiming, §4.1/§4.2
 binding (submitter-match and agent-key pairing), §5 resolution (card +
-WebFinger), and the §6 hash-chained, checkpoint-signed transparency log,
-including an independent chain re-verification in a second implementation.
+WebFinger), and the §6 hash-chained, owner-scoped history log.
 The §3.2 domain tier is implemented (well-known + DNS-over-HTTPS fetch,
 sync, staleness transitions) and verified against a local record; live
 verification against a public domain is pending. The AgentMesh Rust SDK

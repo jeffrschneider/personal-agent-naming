@@ -35,7 +35,6 @@ pub fn router(pool: PgPool) -> Router {
         .route("/api/domains/sync", post(domains_sync))
         .route("/api/pair/start", post(pair_start))
         .route("/api/pair/complete", post(pair_complete))
-        .route("/api/handles/log/checkpoint", get(log_checkpoint))
         .route("/api/handles/start", post(handles_start))
         .route("/api/handles/verify", post(handles_verify))
         .route("/api/handles/claim", post(handles_claim))
@@ -384,13 +383,6 @@ async fn pair_complete(
     Ok(Json(serde_json::json!({ "ok": true, "handle": handle })))
 }
 
-async fn log_checkpoint(
-    State(pool): State<PgPool>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let cp = registrar::checkpoint(&pool).await.map_err(reg_err)?;
-    Ok(Json(serde_json::json!({ "ok": true, "checkpoint": cp })))
-}
-
 /// The PAN card (§5.1): envelope + typed endpoints + verbatim manifest.
 fn build_card(h: &registrar::Handle, listing: Option<&crate::model::Listing>) -> serde_json::Value {
     let mut endpoints: Vec<serde_json::Value> = Vec::new();
@@ -502,11 +494,15 @@ struct LogQuery {
     limit: Option<i64>,
 }
 
+/// Owner-scoped: the caller's own handle history, behind the verified
+/// session. The log is not world-readable (PAN §6).
 async fn handles_log(
     State(pool): State<PgPool>,
+    headers: HeaderMap,
     Query(q): Query<LogQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let email = session_from(&pool, &headers).await?;
     let entries =
-        registrar::log_entries(&pool, q.limit.unwrap_or(100)).await.map_err(reg_err)?;
+        registrar::log_entries(&pool, &email, q.limit.unwrap_or(100)).await.map_err(reg_err)?;
     Ok(Json(serde_json::json!({ "ok": true, "entries": entries })))
 }

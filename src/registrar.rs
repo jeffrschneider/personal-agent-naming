@@ -244,59 +244,6 @@ async fn log_action(
     Ok(())
 }
 
-/// The registrar's Ed25519 signing keypair, created on first use and kept
-/// in registrar_meta.
-async fn signing_key(pool: &PgPool) -> Result<agentmesh::KeyPair, RegistrarError> {
-    let row: Option<(String,)> =
-        sqlx::query_as("SELECT value FROM registrar_meta WHERE key = 'log_signing_seed'")
-            .fetch_optional(pool)
-            .await?;
-    if let Some((seed,)) = row {
-        return agentmesh::KeyPair::from_seed(&seed)
-            .map_err(|e| RegistrarError::Invalid(format!("bad stored signing seed: {e}")));
-    }
-    let kp = agentmesh::KeyPair::new_user();
-    let seed = kp
-        .seed()
-        .map_err(|e| RegistrarError::Invalid(format!("seed export failed: {e}")))?;
-    sqlx::query(
-        "INSERT INTO registrar_meta (key, value) VALUES ('log_signing_seed', $1) \
-         ON CONFLICT (key) DO NOTHING",
-    )
-    .bind(&seed)
-    .execute(pool)
-    .await?;
-    log::info!("[catalog:registrar] generated log signing key: {}", kp.public_key());
-    Ok(kp)
-}
-
-/// Signed checkpoint over the log head (PAN §6): anyone replaying the log
-/// and recomputing the chain can check it against this signature.
-pub async fn checkpoint(pool: &PgPool) -> Result<serde_json::Value, RegistrarError> {
-    use base64::Engine;
-    let head: Option<(i64, Option<String>)> =
-        sqlx::query_as("SELECT id, entry_hash FROM handle_log ORDER BY id DESC LIMIT 1")
-            .fetch_optional(pool)
-            .await?;
-    let (seq, entry_hash) = match head {
-        Some((s, Some(h))) => (s, h),
-        _ => return Err(RegistrarError::Invalid("log has no chained entries yet".into())),
-    };
-    let kp = signing_key(pool).await?;
-    let at = Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true);
-    let msg = format!("pan-log-checkpoint-v1:{seq}:{entry_hash}:{at}");
-    let sig = kp
-        .sign(msg.as_bytes())
-        .map_err(|e| RegistrarError::Invalid(format!("signing failed: {e}")))?;
-    Ok(serde_json::json!({
-        "seq": seq,
-        "entry_hash": entry_hash,
-        "at": at,
-        "signature": base64::engine::general_purpose::STANDARD.encode(sig),
-        "signer": kp.public_key(),
-    }))
-}
-
 /// Can this verified email bind a handle to this listing on email proof
 /// alone? Only if it submitted the listing (PAN §4.1). Key-bearing listings
 /// need pairing (§4.2) — email proof says nothing about agent control.
@@ -813,13 +760,16 @@ pub async fn domain_sweep(pool: &PgPool) {
     }
 }
 
-/// The public transparency log, newest first, with chain hashes.
-pub async fn log_entries(pool: &PgPool, limit: i64) -> Result<Vec<serde_json::Value>, RegistrarError> {
+/// One owner's own handle history (PAN §6). Owner-scoped by verified
+/// anchor: the log is never world-readable, since email-tier handles embed
+/// the owner's address and a public log would enumerate their whole roster.
+pub async fn log_entries(pool: &PgPool, email: &str, limit: i64) -> Result<Vec<serde_json::Value>, RegistrarError> {
     let rows: Vec<(i64, DateTime<Utc>, String, String, String, serde_json::Value, Option<String>, Option<String>)> =
         sqlx::query_as(
             "SELECT id, at, action, handle, email, detail, prev_hash, entry_hash \
-             FROM handle_log ORDER BY id DESC LIMIT $1",
+             FROM handle_log WHERE email = $1 ORDER BY id DESC LIMIT $2",
         )
+        .bind(email)
         .bind(limit.clamp(1, 500))
         .fetch_all(pool)
         .await?;

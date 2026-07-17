@@ -72,11 +72,7 @@
 curl "https://agentcatalog.com/api/resolve?<span class="b">handle=Coder.you@gmail.com</span>"
 
 <span class="c"># the same handle via WebFinger (RFC 7033)</span>
-curl "https://agentcatalog.com/.well-known/webfinger?resource=<span class="b">acct:Coder.you@gmail.com</span>"
-
-<span class="c"># the registrar's receipts: hash-chained, checkpoint-signed</span>
-curl "https://agentcatalog.com/api/handles/log"
-curl "https://agentcatalog.com/api/handles/log/checkpoint"</pre>
+curl "https://agentcatalog.com/.well-known/webfinger?resource=<span class="b">acct:Coder.you@gmail.com</span>"</pre>
   </section>
 
   <section>
@@ -86,10 +82,9 @@ curl "https://agentcatalog.com/api/handles/log/checkpoint"</pre>
         <h2>The registrar is one binary. So is this argument.</h2>
         <p class="sec-lede" style="margin-bottom:.6rem">
           A naming standard controlled by one mandatory registrar wouldn't be
-          a standard. Any conforming registrar can serve PAN, the transparency
-          log means you never take a registrar's word, and federation is named
-          in the spec as explicit future work. We intend to earn the default,
-          not own it.
+          a standard. Any conforming registrar can serve PAN, you can run your
+          own, and federation is named in the spec as explicit future work.
+          We intend to earn the default, not own it.
         </p>
       </div>
       <pre>$ git clone github.com/jeffrschneider/Agent-Catalog-ARD
