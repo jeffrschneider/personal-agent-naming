@@ -37,6 +37,18 @@ async fn main() {
     store::migrate(&pool).await.expect("migrations failed");
     log::info!("[catalog] database ready");
 
+    // Domain-tier re-verification (PAN §3.2): re-sync every known domain
+    // daily; staleness and release transitions happen in the sweep.
+    {
+        let sweep_pool = pool.clone();
+        tokio::spawn(async move {
+            loop {
+                registrar::domain_sweep(&sweep_pool).await;
+                tokio::time::sleep(std::time::Duration::from_secs(24 * 3600)).await;
+            }
+        });
+    }
+
     // Source connectors. AgentMesh is the first; each runs as a background
     // task feeding the same listings/presence tables the API serves.
     match mesh::config_from_env() {

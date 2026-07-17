@@ -555,6 +555,264 @@ pub async fn resolve(pool: &PgPool, handle: &str) -> Result<Option<Handle>, Regi
     .await?)
 }
 
+// ── domain tier (§3.2): record-driven, publicly re-verifiable ─────────────
+
+/// One declared handle from a domain record.
+#[derive(Debug, serde::Deserialize)]
+pub struct DomainEntry {
+    pub name: String,
+    #[serde(default)]
+    pub key: Option<String>,
+}
+
+/// Fetch a domain's PAN record: well-known first (HTTPS, loopback excepted
+/// for dev), DNS TXT at `_pan.<domain>` via DNS-over-HTTPS as fallback.
+async fn fetch_domain_record(domain: &str) -> Result<Vec<DomainEntry>, RegistrarError> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| RegistrarError::Invalid(e.to_string()))?;
+
+    // The spec requires HTTPS; loopback is the dev exception.
+    let loopback = domain.starts_with("localhost") || domain.starts_with("127.0.0.1");
+    let scheme = if loopback { "http" } else { "https" };
+    let wk_url = format!("{scheme}://{domain}/.well-known/pan.json");
+    match client.get(&wk_url).send().await {
+        Ok(r) if r.status().is_success() => {
+            #[derive(serde::Deserialize)]
+            struct WellKnown {
+                version: String,
+                handles: Vec<DomainEntry>,
+            }
+            let wk: WellKnown = r
+                .json()
+                .await
+                .map_err(|e| RegistrarError::Invalid(format!("pan.json didn't parse: {e}")))?;
+            if !wk.version.starts_with("pan-") {
+                return Err(RegistrarError::Invalid("pan.json has an unknown version".into()));
+            }
+            log::info!("[catalog:domains] {domain}: well-known record, {} handle(s)", wk.handles.len());
+            return Ok(wk.handles);
+        }
+        Ok(r) => log::info!("[catalog:domains] {domain}: no well-known record (HTTP {}), trying DNS", r.status()),
+        Err(e) => log::info!("[catalog:domains] {domain}: well-known fetch failed ({e}), trying DNS"),
+    }
+
+    // DNS TXT via DoH: one record per handle, "v=pan1; name=X; key=Y".
+    let doh = format!("https://cloudflare-dns.com/dns-query?name=_pan.{domain}&type=TXT");
+    let resp: serde_json::Value = client
+        .get(&doh)
+        .header("accept", "application/dns-json")
+        .send()
+        .await
+        .map_err(|e| RegistrarError::Invalid(format!("DNS lookup failed: {e}")))?
+        .json()
+        .await
+        .map_err(|e| RegistrarError::Invalid(format!("DNS response didn't parse: {e}")))?;
+    let mut entries = Vec::new();
+    for ans in resp.get("Answer").and_then(|a| a.as_array()).unwrap_or(&Vec::new()) {
+        let Some(data) = ans.get("data").and_then(|d| d.as_str()) else { continue };
+        // TXT payloads arrive as one or more quoted chunks; join them.
+        let txt: String = data.split('"').filter(|s| !s.trim().is_empty()).collect();
+        let mut fields: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+        for part in txt.split(';') {
+            if let Some((k, v)) = part.split_once('=') {
+                fields.insert(k.trim(), v.trim());
+            }
+        }
+        if fields.get("v") != Some(&"pan1") {
+            continue;
+        }
+        if let Some(name) = fields.get("name") {
+            entries.push(DomainEntry {
+                name: (*name).to_string(),
+                key: fields.get("key").map(|k| (*k).to_string()),
+            });
+        }
+    }
+    if entries.is_empty() {
+        return Err(RegistrarError::Invalid(format!(
+            "no PAN record found for {domain} (no /.well-known/pan.json, no _pan TXT records)"
+        )));
+    }
+    log::info!("[catalog:domains] {domain}: DNS record, {} handle(s)", entries.len());
+    Ok(entries)
+}
+
+/// Sync a domain (§3.2): mirror its published record into claims/bindings.
+/// Unauthenticated by design — the record is the authorization. Returns a
+/// per-handle summary.
+pub async fn sync_domain(pool: &PgPool, domain: &str) -> Result<serde_json::Value, RegistrarError> {
+    let domain = domain.trim().to_lowercase();
+    if domain.is_empty() || domain.contains('@') || domain.contains('/') || domain.contains(char::is_whitespace) {
+        return Err(RegistrarError::Invalid("that doesn't look like a domain".into()));
+    }
+    let entries = fetch_domain_record(&domain).await?;
+    let mut summary: Vec<serde_json::Value> = Vec::new();
+    let mut declared: Vec<String> = Vec::new();
+
+    for e in &entries {
+        let Ok(name) = validate_name(&e.name) else {
+            summary.push(serde_json::json!({ "name": e.name, "status": "invalid-name" }));
+            continue;
+        };
+        let handle = format!("{name}@{domain}");
+        let key = handle.to_lowercase();
+        declared.push(key.clone());
+
+        // The listing a declared agent key points at, if harvested yet.
+        let listing_id: Option<Uuid> = match &e.key {
+            Some(k) => sqlx::query_as::<_, (Uuid,)>(
+                "SELECT id FROM listings WHERE source = 'agentmesh' AND source_id = $1",
+            )
+            .bind(k.trim())
+            .fetch_optional(pool)
+            .await?
+            .map(|(id,)| id),
+            None => None,
+        };
+        let bind_method = listing_id.map(|_| "domain-record");
+
+        let existing: Option<(String, String)> = sqlx::query_as(
+            "SELECT anchor, email FROM handles WHERE handle_key = $1 AND released_at IS NULL",
+        )
+        .bind(&key)
+        .fetch_optional(pool)
+        .await?;
+
+        match existing {
+            // Ours: refresh verification, follow key/binding changes.
+            Some((anchor, owner)) if anchor == "domain" && owner == domain => {
+                sqlx::query(
+                    "UPDATE handles SET verified_at = now(), stale = false, \
+                         listing_id = COALESCE($2, listing_id), \
+                         bind_method = COALESCE($3, bind_method) \
+                     WHERE handle_key = $1 AND released_at IS NULL",
+                )
+                .bind(&key)
+                .bind(listing_id)
+                .bind(bind_method)
+                .execute(pool)
+                .await?;
+                summary.push(serde_json::json!({ "handle": handle, "status": "verified" }));
+            }
+            // Taken at the other tier (or another domain, impossible by
+            // string) — Rule 2: first come, first served. Log the refusal.
+            Some(_) => {
+                log_action(pool, "refused", &handle, &domain,
+                    serde_json::json!({ "reason": "taken", "tier": "domain" })).await?;
+                summary.push(serde_json::json!({ "handle": handle, "status": "taken" }));
+            }
+            // New claim (cooling-off still applies).
+            None => {
+                let (cooling,): (i64,) = sqlx::query_as(
+                    "SELECT count(*) FROM handles WHERE handle_key = $1 AND released_at > now() - ($2 || ' days')::interval",
+                )
+                .bind(&key)
+                .bind(COOLING_OFF_DAYS.to_string())
+                .fetch_one(pool)
+                .await?;
+                if cooling > 0 {
+                    summary.push(serde_json::json!({ "handle": handle, "status": "cooling-off" }));
+                    continue;
+                }
+                sqlx::query(
+                    "INSERT INTO handles (handle, handle_key, email, anchor, listing_id, bind_method, verified_at, stale) \
+                     VALUES ($1, $2, $3, 'domain', $4, $5, now(), false)",
+                )
+                .bind(&handle)
+                .bind(&key)
+                .bind(&domain)
+                .bind(listing_id)
+                .bind(bind_method)
+                .execute(pool)
+                .await?;
+                log_action(pool, "claimed", &handle, &domain,
+                    serde_json::json!({ "anchor": "domain", "listing_id": listing_id, "method": bind_method })).await?;
+                summary.push(serde_json::json!({ "handle": handle, "status": "claimed", "bound": listing_id.is_some() }));
+            }
+        }
+    }
+
+    // Entries the record no longer declares: mark stale (released later by
+    // the sweep, after the grace window).
+    let removed: Vec<(String,)> = sqlx::query_as(
+        "UPDATE handles SET stale = true \
+         WHERE anchor = 'domain' AND email = $1 AND released_at IS NULL \
+           AND stale = false AND NOT (handle_key = ANY($2)) \
+         RETURNING handle",
+    )
+    .bind(&domain)
+    .bind(&declared)
+    .fetch_all(pool)
+    .await?;
+    for (h,) in &removed {
+        log_action(pool, "stale", h, &domain,
+            serde_json::json!({ "reason": "removed-from-record" })).await?;
+        summary.push(serde_json::json!({ "handle": h, "status": "stale" }));
+    }
+
+    Ok(serde_json::json!({ "domain": domain, "handles": summary }))
+}
+
+/// Periodic re-verification (§3.2): re-sync every known domain; mark
+/// domains whose records stopped resolving stale after the grace window;
+/// release long-stale handles (cooling-off then applies as usual).
+pub async fn domain_sweep(pool: &PgPool) {
+    let domains: Vec<(String,)> = match sqlx::query_as(
+        "SELECT DISTINCT email FROM handles WHERE anchor = 'domain' AND released_at IS NULL",
+    )
+    .fetch_all(pool)
+    .await
+    {
+        Ok(d) => d,
+        Err(e) => {
+            log::error!("[catalog:domains] sweep query failed: {e}");
+            return;
+        }
+    };
+    for (domain,) in domains {
+        match sync_domain(pool, &domain).await {
+            Ok(_) => {}
+            Err(e) => {
+                log::warn!("[catalog:domains] sweep: {domain} unfetchable ({e})");
+                // Unfetchable: stale after 7 days without verification.
+                let marked: Result<Vec<(String,)>, _> = sqlx::query_as(
+                    "UPDATE handles SET stale = true \
+                     WHERE anchor = 'domain' AND email = $1 AND released_at IS NULL \
+                       AND stale = false AND verified_at < now() - interval '7 days' \
+                     RETURNING handle",
+                )
+                .bind(&domain)
+                .fetch_all(pool)
+                .await;
+                if let Ok(rows) = marked {
+                    for (h,) in rows {
+                        let _ = log_action(pool, "stale", &h, &domain,
+                            serde_json::json!({ "reason": "record-unfetchable" })).await;
+                    }
+                }
+            }
+        }
+    }
+    // Release anything stale past the 30-day grace.
+    let released: Result<Vec<(String, String)>, _> = sqlx::query_as(
+        "UPDATE handles SET released_at = now() \
+         WHERE anchor = 'domain' AND released_at IS NULL AND stale = true \
+           AND verified_at < now() - interval '30 days' \
+         RETURNING handle, email",
+    )
+    .fetch_all(pool)
+    .await;
+    if let Ok(rows) = released {
+        for (h, d) in rows {
+            let _ = log_action(pool, "released", &h, &d,
+                serde_json::json!({ "reason": "stale-past-grace" })).await;
+            log::info!("[catalog:domains] released stale handle: {h}");
+        }
+    }
+}
+
 /// The public transparency log, newest first, with chain hashes.
 pub async fn log_entries(pool: &PgPool, limit: i64) -> Result<Vec<serde_json::Value>, RegistrarError> {
     let rows: Vec<(i64, DateTime<Utc>, String, String, String, serde_json::Value, Option<String>, Option<String>)> =

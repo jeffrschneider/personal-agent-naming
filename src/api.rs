@@ -29,6 +29,7 @@ pub fn router(pool: PgPool) -> Router {
         .route("/api/resolve", get(resolve_handle))
         .route("/.well-known/webfinger", get(webfinger))
         .route("/api/listings/mine", get(listings_mine))
+        .route("/api/domains/sync", post(domains_sync))
         .route("/api/pair/start", post(pair_start))
         .route("/api/pair/complete", post(pair_complete))
         .route("/api/handles/log/checkpoint", get(log_checkpoint))
@@ -283,6 +284,21 @@ async fn handles_mine(
     let email = session_from(&pool, &headers).await?;
     let handles = registrar::mine(&pool, &email).await.map_err(reg_err)?;
     Ok(Json(serde_json::json!({ "ok": true, "email": email, "handles": handles })))
+}
+
+#[derive(Deserialize)]
+struct DomainSyncBody {
+    domain: String,
+}
+
+/// Unauthenticated by design (PAN §3.2): the published record is the
+/// authorization — only the domain's controller could have put it there.
+async fn domains_sync(
+    State(pool): State<PgPool>,
+    Json(body): Json<DomainSyncBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let summary = registrar::sync_domain(&pool, &body.domain).await.map_err(reg_err)?;
+    Ok(Json(serde_json::json!({ "ok": true, "sync": summary })))
 }
 
 #[derive(Deserialize)]
