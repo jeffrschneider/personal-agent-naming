@@ -3,11 +3,11 @@
 **Version:** 0.2-draft · **Date:** 2026-07-17 · **Status:** draft, one reference implementation
 **Authors:** Jeff R Schneider <jeffrschneider@gmail.com>
 
-A small protocol giving AI agents human-handleable names — something a person
+A small protocol giving AI agents human-handleable names: something a person
 can put in an email signature or say in a meeting, the way they hand out a
 phone number or a social handle. PAN targets the largest and least-served
 agent population: **personal agents**, owned by people who have an email
-address and nothing else — no domain, no PKI, no ops team. For those who do
+address and nothing else. No domain, no PKI, no ops team. For those who do
 control a domain, PAN adds a second anchor tier whose proofs anyone can
 re-verify.
 
@@ -20,18 +20,18 @@ capability claims, and does not host agents.
 
 ## 1. Terminology
 
-- **Handle** — one globally unique string naming an agent.
-- **Anchor** — the thing whose control authorizes claims: an **email
+- **Handle**: one globally unique string naming an agent.
+- **Anchor**: the thing whose control authorizes claims, either an **email
   address** (proven to the registrar once) or a **domain** (proven by
   records anyone can re-fetch).
-- **Registrar** — a service that accepts claims, enforces uniqueness,
+- **Registrar**: a service that accepts claims, enforces uniqueness,
   answers resolution queries, and maintains the transparency log.
-- **Listing** — the registrar's record of an agent (however sourced:
+- **Listing**: the registrar's record of an agent (however sourced:
   harvested from an agent network, or submitted directly).
-- **Binding** — the attachment of a handle to a listing.
-- **Card** — what resolution returns: the PAN envelope plus the agent's
+- **Binding**: the attachment of a handle to a listing.
+- **Card**: what resolution returns, the PAN envelope plus the agent's
   manifest (§5).
-- **Domain record** — the self-published file or DNS record by which a
+- **Domain record**: the self-published file or DNS record by which a
   domain declares its handles (§3.2).
 
 ## 2. Handles
@@ -48,15 +48,15 @@ domain tier:   <name>@<domain>       PublicAgent@jeffschneider.com
   is no further grammar.
 - `<email>` and `<domain>` are lowercased.
 
-**Rule 1 — nobody parses handles.** A handle is an opaque key. Resolution is
+**Rule 1: nobody parses handles.** A handle is an opaque key. Resolution is
 exact-string lookup of the whole handle; no consumer may decompose it. The
 two tiers can even render colliding strings
-(`translate.PublicAgent@jeffschneider.com` could arise from either tier) —
-this is harmless *because* nobody parses: the string belongs to whoever
+(`translate.PublicAgent@jeffschneider.com` could arise from either tier).
+This is harmless *because* nobody parses: the string belongs to whoever
 claimed it first, and the registrar knows its tier because it witnessed the
 claim.
 
-**Rule 2 — uniqueness is full-string, first come, first served, across both
+**Rule 2: uniqueness is full-string, first come, first served, across both
 tiers.** The registrar enforces uniqueness on the case-folded complete
 handle at claim time. Second claimant is refused with "taken," whatever
 their tier. No exceptions, no adjudication.
@@ -80,7 +80,7 @@ Registrars MUST rate-limit code issuance per anchor.
 **Lifetime = anchor lifetime.** A handle lives as long as its owner can
 re-prove the anchor when required. This is intended: a personal address that
 outlives employers keeps its handles; a work address that dies at
-offboarding takes its handles with it — that is the governance boundary
+offboarding takes its handles with it. That is the governance boundary
 working, not a defect.
 
 **Release and cooling-off.** Releasing a handle tombstones it. A released
@@ -91,7 +91,7 @@ start pointing at a stranger.
 ### 3.2 Domain anchors (self-published, publicly re-verifiable)
 
 The domain tier is **record-driven**: the domain publishes the truth and the
-registrar mirrors it. There are no codes and no sessions — the ability to
+registrar mirrors it. There are no codes and no sessions. The ability to
 publish at the domain *is* the proof, and unlike an email proof, anyone can
 re-fetch it at any time.
 
@@ -123,18 +123,18 @@ A domain declares its handles in either or both of:
 binding (§4.3).
 
 **Sync.** Anyone may ask the registrar to sync a domain
-(`POST /api/domains/sync {domain}` in the reference implementation — no
+(`POST /api/domains/sync {domain}` in the reference implementation; no
 authentication needed, since the record is the authorization). The registrar
 fetches the record (well-known first, DNS fallback), verifies, and upserts:
-new entries become claims (subject to Rule 2 — a string already taken at
+new entries become claims (subject to Rule 2: a string already taken at
 either tier is refused and the conflict logged), removed entries become
 releases (after the staleness grace below), key changes become re-bindings.
 
 **Re-verification.** Registrars MUST re-verify domain records periodically
 (reference: daily) and record the last-verified time on the card. A record
 that stops resolving marks its claims **stale** after a grace window
-(reference: 7 days) — resolution signals staleness — and releases them
-(normal cooling-off applies) after a longer window (reference: 30 days).
+(reference: 7 days), during which resolution signals staleness, and releases
+them (normal cooling-off applies) after a longer window (reference: 30 days).
 Consumers who don't trust the registrar's schedule can always fetch the
 domain record themselves; that is the point of this tier.
 
@@ -158,8 +158,8 @@ from that key:
 
 1. The handle owner, in an authenticated session, requests a **pairing
    code**: short, single-use, ≤10-minute expiry (e.g. `KX4-92F`).
-2. The software that holds the agent's private key — *any* software: a
-   gateway, a daemon, a five-line script — signs the UTF-8 bytes of the
+2. The software that holds the agent's private key (*any* software: a
+   gateway, a daemon, a five-line script) signs the UTF-8 bytes of the
    canonical string:
 
    ```
@@ -182,7 +182,7 @@ the signed string includes both the code and the agent ID.
 
 **Host neutrality is normative.** A registrar MUST NOT require any
 particular agent host, framework, or network for pairing. If a listing
-declares a public key, whoever holds that key can pair — this is what makes
+declares a public key, whoever holds that key can pair. This is what makes
 PAN implementable by any personal-agent runtime, not just the reference
 stack.
 
@@ -226,7 +226,7 @@ Resolution maps a handle to its **card**.
 ```
 
 The manifest is carried verbatim from its source (an AgentMesh manifest, an
-A2A agent card, a manual submission) — PAN wraps existing card formats, it
+A2A agent card, a manual submission). PAN wraps existing card formats, it
 does not replace them. What a consumer *does* with an endpoint belongs to
 that endpoint's protocol, not to PAN.
 
@@ -256,7 +256,7 @@ updated or deleted, and the log is publicly readable.
 
 **Hash chaining is REQUIRED.** Each entry carries the SHA-256 hash of the
 previous entry, computed over a canonical serialization that includes that
-previous hash — so the log is a chain, and any rewrite of history breaks
+previous hash, so the log is a chain and any rewrite of history breaks
 every subsequent link:
 
 ```json
@@ -266,7 +266,7 @@ every subsequent link:
 ```
 
 **Signed checkpoints are REQUIRED.** The registrar holds an Ed25519 signing
-key and periodically publishes a checkpoint — a signature over
+key and periodically publishes a checkpoint: a signature over
 `(seq, entry_hash, timestamp)` of the latest entry. A mirror that replays
 the log, recomputes the chain, and checks the checkpoint detects tampering
 without trusting the registrar. Merkle inclusion proofs (RFC 9162 / SCITT)
@@ -284,16 +284,16 @@ A conforming registrar:
 4. Serves resolution without authentication, and labels every card with its
    anchor tier and binding method.
 5. Re-verifies domain records on schedule and surfaces staleness honestly.
-6. Requires binding proofs per §4 — email proof alone never binds to a
+6. Requires binding proofs per §4: email proof alone never binds to a
    listing the anchor didn't submit.
 
-## 8. Trust model — read this before trusting a handle
+## 8. Trust model: read this before trusting a handle
 
 Trust in PAN has two independent axes:
 
 | Axis | Weakest → strongest |
 |---|---|
-| **Anchor** (who owns the name) | `email` — witnessed once by the registrar (notarized) → `domain` — self-published, anyone can re-fetch |
+| **Anchor** (who owns the name) | `email` (witnessed once by the registrar, notarized) → `domain` (self-published, anyone can re-fetch) |
 | **Binding** (is it really that agent) | `email-submitter` (notarized) → `agent-key` (cryptographic, witnessed) → `domain-record` (cryptographic *and* re-verifiable) |
 
 **For email anchors the registrar is a notary, not an oracle.** An email
@@ -309,35 +309,35 @@ is an address, not a badge.
 
 ## 9. Security considerations
 
-- **Code guessing** — registrars MUST bound verification attempts and rate-
+- **Code guessing**: registrars MUST bound verification attempts and rate-
   limit issuance (reference: 5 attempts/code, 5 codes/hour/anchor).
-- **Squatting** — full-string uniqueness plus visible anchors makes
+- **Squatting**: full-string uniqueness plus visible anchors makes
   impersonation self-labeling: `support.paypal.attacker@gmail.com` carries
   its own anchor in plain sight. Registrars MAY additionally police names
   but the protocol does not require taste.
-- **Email-costume confusion** — handles look like email addresses; mail
+- **Email-costume confusion**: handles look like email addresses; mail
   sent to one goes wherever the mail system says, which is unrelated to the
   agent. Registrars SHOULD present handles in contexts that discourage
   mailto interpretation.
-- **Anchor compromise** — whoever controls the mailbox or domain controls
+- **Anchor compromise**: whoever controls the mailbox or domain controls
   its handles; anchor hygiene (2FA, registrar-lock on domains) is
-  inherited — which is also PAN's strength: it rides the most hardened
+  inherited, which is also PAN's strength: it rides the most hardened
   credentials people already have.
-- **Domain expiry and transfer** — a lapsed domain's new owner can publish
+- **Domain expiry and transfer**: a lapsed domain's new owner can publish
   new records. Staleness marking, the release grace window, and cooling-off
   bound the damage; consumers doing high-stakes delegation SHOULD check
   `verified_at` and the log's history for recent re-anchoring.
-- **DNS integrity** — registrars SHOULD resolve `_pan` records through a
+- **DNS integrity**: registrars SHOULD resolve `_pan` records through a
   validating resolver (DNSSEC where present) or DNS-over-HTTPS; well-known
   fetches MUST use HTTPS.
 
 ## 10. Out of scope
 
-- **Federation** — multiple registrars, referral resolution, cross-registrar
+- **Federation**: multiple registrars, referral resolution, cross-registrar
   uniqueness.
-- **Additional anchor proofs** — e.g. OIDC sign-in as a mailbox proof.
-- **Merkle/SCITT log upgrades** — inclusion proofs atop the §6 chain.
-- **Reachability and messaging** — contacting a resolved agent, including
+- **Additional anchor proofs**: e.g. OIDC sign-in as a mailbox proof.
+- **Merkle/SCITT log upgrades**: inclusion proofs atop the §6 chain.
+- **Reachability and messaging**: contacting a resolved agent, including
   any registrar-hosted chat or relay surface, belongs to the messaging
   protocols named in the card's endpoints.
 
@@ -346,11 +346,10 @@ is an address, not a badge.
 The Agent Catalog (this repository) is the reference registrar. At time of
 writing, live and verified end-to-end: email-tier claiming, §4.1/§4.2
 binding (submitter-match and agent-key pairing), §5 resolution (card +
-WebFinger), and the §6 hash-chained, checkpoint-signed transparency log —
+WebFinger), and the §6 hash-chained, checkpoint-signed transparency log,
 including an independent chain re-verification in a second implementation.
 The §3.2 domain tier is implemented (well-known + DNS-over-HTTPS fetch,
 sync, staleness transitions) and verified against a local record; live
 verification against a public domain is pending. The AgentMesh Rust SDK
-carries
-`examples/pan_pair.rs`, a standalone pairing signer demonstrating §4.2
-without any particular agent host.
+carries `examples/pan_pair.rs`, a standalone pairing signer demonstrating
+§4.2 without any particular agent host.
