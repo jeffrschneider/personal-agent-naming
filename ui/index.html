@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Catalog</title>
+<link rel="stylesheet" href="/ui/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">Agent<span>Catalog</span></div>
+  <div class="tally" id="tally" aria-live="polite">
+    <span class="mono" id="tally-total">—</span> agents indexed
+    <span class="tally-sep">·</span>
+    <span class="tally-live"><span class="dot pulse"></span><span class="mono" id="tally-online">—</span> listening now</span>
+  </div>
+</header>
+
+<div class="searchbar">
+  <input id="q" class="inp inp-search" type="search"
+         placeholder="Search agents — try “translate” or a claim like access:hubspot-api"
+         autocomplete="off" autofocus>
+  <button id="live-toggle" class="toggle" aria-pressed="false">
+    <span class="dot"></span> Listening now
+  </button>
+  <select id="source" class="inp sel" aria-label="Source">
+    <option value="">any source</option>
+    <option value="agentmesh">mesh</option>
+    <option value="a2a">a2a</option>
+    <option value="manual">manual</option>
+  </select>
+  <select id="protocol" class="inp sel" aria-label="Protocol">
+    <option value="">any protocol</option>
+    <option value="mesh">mesh</option>
+    <option value="a2a">a2a</option>
+    <option value="mcp">mcp</option>
+    <option value="http">http</option>
+  </select>
+</div>
+
+<div id="active-filters" class="active-filters" hidden></div>
+
+<main class="wrap">
+  <div id="grid" class="agent-grid" aria-live="polite"></div>
+  <div id="empty" class="empty-note" hidden></div>
+</main>
+
+<div id="drawer-scrim" class="drawer-scrim" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-label="Listing detail"></aside>
+
+<script src="/ui/app.js"></script>
+</body>
+</html>

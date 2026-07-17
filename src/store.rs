@@ -79,6 +79,47 @@ pub async fn get(pool: &PgPool, id: uuid::Uuid) -> Result<Option<Listing>, sqlx:
     .await
 }
 
+/// Shelf-level counts for the UI header: total listings, how many are
+/// listening right now (any alive presence state).
+pub async fn stats(pool: &PgPool) -> Result<(i64, i64), sqlx::Error> {
+    let (total, online): (i64, i64) = sqlx::query_as(
+        r#"
+        SELECT count(*),
+               count(*) FILTER (WHERE p.state IN ('online','busy','degraded'))
+        FROM listings l
+        LEFT JOIN presence p ON p.listing_id = l.id
+        "#,
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok((total, online))
+}
+
+/// Recent probe outcomes for one listing, newest first — the "prove it"
+/// record shown on the detail view.
+pub async fn probes_for(
+    pool: &PgPool,
+    listing_id: uuid::Uuid,
+) -> Result<Vec<serde_json::Value>, sqlx::Error> {
+    let rows: Vec<(chrono::DateTime<chrono::Utc>, bool, Option<i32>, Option<String>)> =
+        sqlx::query_as(
+            r#"
+            SELECT at, ok, latency_ms, detail
+            FROM probes WHERE listing_id = $1
+            ORDER BY at DESC LIMIT 20
+            "#,
+        )
+        .bind(listing_id)
+        .fetch_all(pool)
+        .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(at, ok, latency_ms, detail)| {
+            serde_json::json!({ "at": at, "ok": ok, "latency_ms": latency_ms, "detail": detail })
+        })
+        .collect())
+}
+
 /// Upsert a connector-harvested listing. (source, source_id) is the
 /// idempotency key — every sweep re-upserts and stays idempotent.
 #[allow(clippy::too_many_arguments)]

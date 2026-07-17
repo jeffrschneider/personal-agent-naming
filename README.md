@@ -35,8 +35,14 @@ listening right now."*
 ## Quickstart (dev)
 
 ```
-cargo run                 # serves http://localhost:8080
+cargo run                 # serves http://localhost:8080 — UI and JSON API on one port
 ```
+
+The UI ships inside the binary: the live shelf (search, "listening now"
+filter, liveness-railed agent cards) and a detail drawer per listing
+(verification record, skills, node vouch, verbatim manifest). Listing pages
+deep-link (`/?open=<id>`). Self-hosted org catalogs get the identical UI for
+free — same binary, same port.
 
 That's the whole setup. The catalog runs its own embedded PostgreSQL: the
 first run downloads the server binaries and initializes a cluster, both under

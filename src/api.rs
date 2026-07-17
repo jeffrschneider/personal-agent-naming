@@ -17,11 +17,32 @@ use crate::store;
 
 pub fn router(pool: PgPool) -> Router {
     Router::new()
+        .route("/", get(ui_index))
+        .route("/ui/style.css", get(ui_css))
+        .route("/ui/app.js", get(ui_js))
         .route("/healthz", get(healthz))
+        .route("/api/stats", get(stats))
         .route("/api/listings", get(list).post(submit))
         .route("/api/listings/:id", get(get_one))
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(pool)
+}
+
+// The UI ships inside the binary: every instance — public shelf or
+// self-hosted org catalog — serves the same interface with zero extra setup.
+async fn ui_index() -> axum::response::Html<&'static str> {
+    axum::response::Html(include_str!("../ui/index.html"))
+}
+async fn ui_css() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {
+    ([(axum::http::header::CONTENT_TYPE, "text/css")], include_str!("../ui/style.css"))
+}
+async fn ui_js() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {
+    ([(axum::http::header::CONTENT_TYPE, "text/javascript")], include_str!("../ui/app.js"))
+}
+
+async fn stats(State(pool): State<PgPool>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let (total, online) = store::stats(&pool).await.map_err(internal)?;
+    Ok(Json(serde_json::json!({ "ok": true, "total": total, "online": online })))
 }
 
 async fn healthz() -> Json<serde_json::Value> {
@@ -43,7 +64,10 @@ async fn get_one(
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     match store::get(&pool, id).await.map_err(internal)? {
-        Some(listing) => Ok(Json(serde_json::json!({ "ok": true, "listing": listing }))),
+        Some(listing) => {
+            let probes = store::probes_for(&pool, id).await.map_err(internal)?;
+            Ok(Json(serde_json::json!({ "ok": true, "listing": listing, "probes": probes })))
+        }
         None => Err((StatusCode::NOT_FOUND, "no such listing".to_string())),
     }
 }
