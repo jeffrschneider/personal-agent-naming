@@ -1,6 +1,7 @@
 # Personal Agent Naming (PAN)
 
 **Version:** 0.2-draft · **Date:** 2026-07-17 · **Status:** draft, one reference implementation
+**Authors:** Jeff R Schneider <jeffrschneider@gmail.com>
 
 A small protocol giving AI agents human-handleable names — something a person
 can put in an email signature or say in a meeting, the way they hand out a
