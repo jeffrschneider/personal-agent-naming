@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Resolve and reach: Personal Agent Naming</title>
-  <meta name="description" content="A handle resolves to a card: a verified address with typed endpoints. Another agent hands that address to the mesh and reaches yours.">
+  <meta name="description" content="A handle resolves to a card of endpoints: the addresses an agent can be reached at. PAN is neutral about the transport. The protocol at each address does the communicating.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,15 +12,27 @@
   <link rel="stylesheet" href="/site.css">
   <style>
     .card{ margin:24px 0 6px; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden;
-      box-shadow:0 30px 70px -40px rgba(0,0,0,.9); max-width:640px; }
+      box-shadow:0 30px 70px -40px rgba(0,0,0,.9); max-width:680px; }
     .card .bar{ display:flex; align-items:center; gap:8px; padding:11px 16px; border-bottom:1px solid var(--line);
       font-family:var(--wire); font-size:.74rem; color:var(--dim); background:rgba(255,255,255,.015); }
     .card .bar .lamp{ width:8px; height:8px; border-radius:50%; background:var(--verify); box-shadow:0 0 10px var(--verify); }
     .card .kv{ padding:16px 18px; font-family:var(--wire); font-size:.84rem; line-height:1.95; }
     .card .kv .k{ color:var(--faint); display:inline-block; width:88px; }
-    .card .kv .name{ color:var(--signal); } .card .kv .ok{ color:var(--verify); } .card .kv .addr{ color:var(--address); }
+    .card .kv .name{ color:var(--signal); } .card .kv .ok{ color:var(--verify); }
+    .card .eps{ border-top:1px solid var(--line); }
+    .card .ep{ display:grid; grid-template-columns:104px 1fr; gap:0 14px; padding:9px 18px; border-bottom:1px solid var(--line);
+      font-family:var(--wire); font-size:.8rem; }
+    .card .eps .ep:last-child{ border-bottom:0; }
+    .card .ep .proto{ color:var(--address); } .card .ep .a{ color:var(--paper); word-break:break-all; }
+    .card .ep .proto.mesh{ color:var(--signal); }
     .card .hand{ padding:12px 18px; border-top:1px solid var(--line); font-family:var(--wire); font-size:.76rem; color:var(--dim); }
     .card .hand b{ color:var(--address); }
+    .verbs{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-top:22px; max-width:660px; }
+    @media (max-width:640px){ .verbs{ grid-template-columns:1fr; } }
+    .verb{ border:1px solid var(--line); border-radius:10px; background:var(--panel); padding:14px 16px;
+      border-top:2px solid var(--hue,var(--signal)); }
+    .verb .w{ font-family:var(--wire); font-size:.78rem; color:var(--hue,var(--signal)); }
+    .verb p{ margin:6px 0 0; font-size:.88rem; color:var(--dim); }
   </style>
 </head>
 <body>
@@ -54,7 +66,8 @@
         <h1>The name is now<br>an <span class="blue">address</span> others use</h1>
         <p class="lede">This is the payoff. Hand your handle to anyone: put it in an email
           signature, or give it to a colleague's agent. They resolve it to a card, and the
-          card is a verified address the mesh can reach.</p>
+          card carries the addresses your agent can be reached at. What speaks to those
+          addresses is the transport, and PAN is neutral about which one.</p>
       </div>
 
       <section class="band">
@@ -62,9 +75,9 @@
           <p class="kicker">resolve</p>
           <h2>A handle in, a card out</h2>
           <p>Resolution is exact-string and needs no account: look up the whole handle, get
-            back the card. The card carries the anchor, the binding method, live presence,
-            and the part that matters here, typed <b>endpoints</b>. Those endpoints are the
-            address.</p>
+            back the card. It carries the binding, live presence, and the part that matters
+            here, the typed <b>endpoints</b>. An endpoint is a protocol and an address, and
+            it can be any protocol the agent actually publishes.</p>
 
           <div class="card">
             <div class="bar"><span class="lamp"></span> resolve · <span style="color:var(--signal)">Coder.jeff@gmail.com</span></div>
@@ -72,30 +85,35 @@
               <div><span class="k">handle</span> <span class="name">Coder.jeff@gmail.com</span></div>
               <div><span class="k">bound</span> <span class="ok">✓ agent-key</span></div>
               <div><span class="k">presence</span> <span class="ok">online</span></div>
-              <div><span class="k">reach</span> <span class="addr">agentmesh</span> · agent <span class="addr">UD653KLV…</span> @ node <span class="addr">UB2FF…</span></div>
-              <div><span class="k"></span> <span class="addr">a2a</span> · <span class="addr">https://…/.well-known/agent-card.json</span></div>
             </div>
-            <div class="hand">the endpoints are the handoff. PAN's job ends here: <b>a verified address</b>.</div>
+            <div class="eps">
+              <div class="ep"><span class="proto mesh">agentmesh</span><span class="a">agent UD653KLV… @ node UB2FF…</span></div>
+              <div class="ep"><span class="proto">a2a</span><span class="a">https://…/.well-known/agent-card.json</span></div>
+              <div class="ep"><span class="proto">https</span><span class="a">https://api.jeff.dev/agent (openapi)</span></div>
+              <div class="ep"><span class="proto">mcp</span><span class="a">https://…/mcp</span></div>
+            </div>
+            <div class="hand">the endpoints are the address. PAN's job ends here. what speaks to them is the transport's job.</div>
           </div>
-
-          <pre class="code"><span class="c"># resolve a handle to its card</span>
-curl "https://agentcatalog.com/api/resolve?<span class="b">handle=Coder.jeff@gmail.com</span>"
-
-<span class="c"># or via WebFinger, so acct: tooling resolves it with no PAN-specific code</span>
-curl "https://agentcatalog.com/.well-known/webfinger?resource=<span class="a">acct:Coder.jeff@gmail.com</span>"</pre>
+          <p style="color:var(--faint); font-family:var(--wire); font-size:.78rem; margin-top:10px;">the card is not an allow-list of two protocols. it carries whatever addresses the agent has.</p>
         </div>
       </section>
 
       <section class="band">
         <div class="wrap">
-          <p class="kicker">reach</p>
-          <h2>The mesh takes it from the address</h2>
-          <p>PAN does not carry the message. It hands over a verified address, and the
-            messaging layer does the talking. Your agent's runtime takes the endpoint off
-            the card and opens a signed request over AgentMesh, or a message over A2A. That
-            boundary is deliberate: naming and reaching are different jobs, done by
-            different layers.</p>
-          <p class="pull">PAN gets you the address. AgentMesh and A2A do the reaching.</p>
+          <p class="kicker">the handoff</p>
+          <h2>PAN names. The transport carries.</h2>
+          <p>PAN does not carry the message. It resolves a name to a set of addresses, and
+            the protocol at whichever address you pick does the communicating. That boundary
+            is deliberate: naming and communicating are different jobs, done by different
+            layers. A consuming agent reads an endpoint off the card and speaks its protocol,
+            with no PAN in the loop from that point on.</p>
+          <div class="verbs">
+            <div class="verb" style="--hue:var(--signal)"><div class="w">agentmesh</div><p>The best-integrated default. The key that bound the name is already the agent's address on the mesh, so there is nothing extra to set up. AgentMesh does the communicating, across firewalls.</p></div>
+            <div class="verb" style="--hue:var(--verify)"><div class="w">a2a</div><p>If the card carries an A2A endpoint, a consumer talks to it directly. A2A does the talking.</p></div>
+            <div class="verb" style="--hue:var(--address)"><div class="w">https · openapi</div><p>A plain reachable endpoint is a valid address. The consumer just calls it over HTTP.</p></div>
+            <div class="verb" style="--hue:var(--broadcast)"><div class="w">mcp · webhooks · more</div><p>Any protocol the agent publishes is a way to reach it. PAN carries the address; it does not judge the transport.</p></div>
+          </div>
+          <p class="pull">PAN gets you the address. The protocol at that address does the communicating.</p>
         </div>
       </section>
 
@@ -105,14 +123,14 @@ curl "https://agentcatalog.com/.well-known/webfinger?resource=<span class="a">ac
           <h2>What a bound name is actually for</h2>
           <ul class="plain">
             <li><b>Agent-to-agent delegation.</b> Your colleague's agent resolves
-              <span class="mono amber">Coder.jeff@gmail.com</span>, gets your agent's real
-              endpoint, and delegates a task to it. Names exist so agents can find and reach
-              each other.</li>
+              <span class="mono amber">Coder.jeff@gmail.com</span>, reads your agent's
+              address off the card, and delegates a task to it over whatever protocol they
+              share. Names exist so agents can find and reach each other.</li>
             <li><b>A handle you can hand out.</b> Put it in an email signature or say it in a
               meeting. A person pastes it into their own agent, or into the registrar, and
               reaches yours.</li>
-            <li><b>Tooling that already speaks acct:.</b> WebFinger means twenty years of
-              existing tooling can resolve a handle with no new code.</li>
+            <li><b>Tooling that already speaks acct:.</b> A PAN handle is a valid
+              <span class="mono">acct:</span> URI, so WebFinger resolves it with no new code.</li>
           </ul>
           <div class="cta">
             <a class="btn btn-signal" href="/">look up a handle</a>
