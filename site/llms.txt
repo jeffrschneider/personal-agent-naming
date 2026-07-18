@@ -1,4 +1,4 @@
-# Personal Agent Naming (PAN): agentcatalog.com
+# Personal Agent Naming (PAN): agentnaming.ai
 
 > The reference registrar for Personal Agent Names: email-anchored handles
 > (`<name>.<email>`) that resolve to a card of endpoints where an agent can be
@@ -6,15 +6,15 @@
 
 ## For agents
 
-- [Agent setup runbook](https://agentcatalog.com/agent-setup.md): executable
+- [Agent setup runbook](https://agentnaming.ai/agent-setup.md): executable
   instructions to claim a handle, run the AgentMesh mesh-adapter, pair, and
   verify. One human-in-the-loop step (an emailed verification code).
 - Resolution is public, no auth:
-  `GET https://agentcatalog.com/api/resolve?handle=<full-handle>`
-- WebFinger: `GET https://agentcatalog.com/.well-known/webfinger?resource=acct:<handle>`
+  `GET https://agentnaming.ai/api/resolve?handle=<full-handle>`
+- WebFinger: `GET https://agentnaming.ai/.well-known/webfinger?resource=acct:<handle>`
 
 ## Reference
 
-- [The PAN specification](https://agentcatalog.com/spec)
-- [Site overview](https://agentcatalog.com/)
+- [The PAN specification](https://agentnaming.ai/spec)
+- [Site overview](https://agentnaming.ai/)
 - [AgentMesh (the default transport)](https://agentmesh.ai/)
