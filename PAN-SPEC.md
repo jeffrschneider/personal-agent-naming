@@ -1,71 +1,68 @@
 # Personal Agent Naming (PAN)
 
-**Version:** 0.2-draft · **Date:** 2026-07-17 · **Status:** draft, one reference implementation
+**Version:** 0.3-draft · **Date:** 2026-07-18 · **Status:** draft, one reference implementation
 **Authors:** Jeff R Schneider <jeffrschneider@gmail.com>
 
 A small protocol giving AI agents human-handleable names: something a person
 can put in an email signature or say in a meeting, the way they hand out a
 phone number or a social handle. PAN targets the largest and least-served
 agent population: **personal agents**, owned by people who have an email
-address and nothing else. No domain, no PKI, no ops team. For those who do
-control a domain, PAN adds a second anchor tier whose proofs anyone can
-re-verify.
+address and nothing else. No domain, no PKI, no ops team.
 
 PAN deliberately does one thing. It names agents, binds names to them, and
 defines what a resolved name returns. It does not transport messages (that
 layer belongs to protocols like A2A and AgentMesh), does not verify
-capability claims, and does not host agents.
+capability claims, does not host agents, and does not do discovery (that
+belongs to catalog/search layers like ARD).
+
+**Relationship to ANS.** The Agent Name Service (ANS) already covers
+domain-anchored, PKI-backed agent identity for organizations that own a
+domain and can run a certificate authority. PAN does not compete there.
+PAN is the layer below that bar: naming for an agent whose owner has an
+inbox, not a PKI team. Domain anchoring is out of scope by design (§9).
 
 ---
 
 ## 1. Terminology
 
-- **Handle**: one globally unique string naming an agent.
-- **Anchor**: the thing whose control authorizes claims, either an **email
-  address** (proven to the registrar once) or a **domain** (proven by
-  records anyone can re-fetch).
+- **Handle**: one globally unique string naming an agent, of the form
+  `<name>.<email>`.
+- **Anchor**: the email address whose control authorizes claims under it.
 - **Registrar**: a service that accepts claims, enforces uniqueness,
-  answers resolution queries, and maintains the transparency log.
-- **Listing**: the registrar's record of an agent (however sourced:
-  harvested from an agent network, or submitted directly).
-- **Binding**: the attachment of a handle to a listing.
-- **Card**: what resolution returns, the PAN envelope plus the agent's
-  manifest (§5).
-- **Domain record**: the self-published file or DNS record by which a
-  domain declares its handles (§3.2).
+  answers resolution queries, and maintains the history log.
+- **Agent record**: the registrar's minimal record of the agent a handle
+  points at: its public key and, optionally, endpoints. It is created by
+  binding, not harvested.
+- **Binding**: the attachment of a handle to an agent record.
+- **Card**: what resolution returns (§5).
 
 ## 2. Handles
 
-Two anchor tiers, two forms:
+A handle has one form:
 
 ```
-email tier:    <name>.<email>        PublicAgent.jeffrschneider@gmail.com
-domain tier:   <name>@<domain>       PublicAgent@jeffschneider.com
+<name>.<email>        PublicAgent.jeffrschneider@gmail.com
 ```
 
 - `<name>` is any non-empty string up to 64 characters containing no
   whitespace, no `@`, and no control characters. **Dots are allowed.** There
   is no further grammar.
-- `<email>` and `<domain>` are lowercased.
+- `<email>` is lowercased.
 
 **Rule 1: nobody parses handles.** A handle is an opaque key. Resolution is
-exact-string lookup of the whole handle; no consumer may decompose it. The
-two tiers can even render colliding strings
-(`translate.PublicAgent@jeffschneider.com` could arise from either tier).
-This is harmless *because* nobody parses: the string belongs to whoever
-claimed it first, and the registrar knows its tier because it witnessed the
-claim.
+exact-string lookup of the whole handle; no consumer may decompose it. This
+is what lets the grammar stay this simple: the string belongs to whoever
+claimed it first, and the registrar knows the anchor because it witnessed
+the claim.
 
-**Rule 2: uniqueness is full-string, first come, first served, across both
-tiers.** The registrar enforces uniqueness on the case-folded complete
-handle at claim time. Second claimant is refused with "taken," whatever
-their tier. No exceptions, no adjudication.
+**Rule 2: uniqueness is full-string, first come, first served.** The
+registrar enforces uniqueness on the case-folded complete handle at claim
+time. The second claimant is refused with "taken." No exceptions, no
+adjudication.
 
 Handles are case-insensitive for matching and case-preserving for display.
 
 ## 3. Claiming
-
-### 3.1 Email anchors (notarized)
 
 Control of the mailbox authorizes claims under it.
 
@@ -88,73 +85,16 @@ handle MUST NOT be claimable by anyone for a cooling-off period (REQUIRED
 minimum 90 days), so that a handle written down last year does not silently
 start pointing at a stranger.
 
-### 3.2 Domain anchors (self-published, publicly re-verifiable)
-
-The domain tier is **record-driven**: the domain publishes the truth and the
-registrar mirrors it. There are no codes and no sessions. The ability to
-publish at the domain *is* the proof, and unlike an email proof, anyone can
-re-fetch it at any time.
-
-A domain declares its handles in either or both of:
-
-- **Well-known file** (HTTPS required):
-
-  ```
-  https://<domain>/.well-known/pan.json
-
-  {
-    "version": "pan-0.2",
-    "handles": [
-      { "name": "PublicAgent", "key": "UD653KLV…" },
-      { "name": "concierge" }
-    ]
-  }
-  ```
-
-- **DNS TXT records** at `_pan.<domain>`, one record per handle
-  (the record names the handle explicitly, so dotted names never meet DNS
-  label rules):
-
-  ```
-  _pan.jeffschneider.com.  TXT  "v=pan1; name=PublicAgent; key=UD653KLV…"
-  ```
-
-`key` is optional; when present it both anchors the name *and* authorizes
-binding (§4.3).
-
-**Sync.** Anyone may ask the registrar to sync a domain
-(`POST /api/domains/sync {domain}` in the reference implementation; no
-authentication needed, since the record is the authorization). The registrar
-fetches the record (well-known first, DNS fallback), verifies, and upserts:
-new entries become claims (subject to Rule 2: a string already taken at
-either tier is refused and the conflict logged), removed entries become
-releases (after the staleness grace below), key changes become re-bindings.
-
-**Re-verification.** Registrars MUST re-verify domain records periodically
-(reference: daily) and record the last-verified time on the card. A record
-that stops resolving marks its claims **stale** after a grace window
-(reference: 7 days), during which resolution signals staleness, and releases
-them (normal cooling-off applies) after a longer window (reference: 30 days).
-Consumers who don't trust the registrar's schedule can always fetch the
-domain record themselves; that is the point of this tier.
-
 ## 4. Binding
 
 Claiming a name and proving you operate an agent are different proofs. A
-registrar MUST NOT bind a handle to a listing on email proof alone unless
-the listing itself was submitted under that same anchor.
+registrar MUST NOT bind a handle on email proof alone unless the agent
+record was submitted under that same anchor.
 
-### 4.1 Submitter-match (email-proven listings)
+### 4.1 Agent-key pairing (the primary path)
 
-A listing submitted directly to the registrar under a verified anchor
-records that anchor as its submitter. A handle anchored to the same email
-may bind to it freely.
-
-### 4.2 Agent-key pairing (key-bearing agents)
-
-For listings that carry a public key (e.g. agents harvested from a network
-where the agent ID *is* an Ed25519 public key), binding requires a signature
-from that key:
+Most personal-agent runtimes hold an Ed25519 key, and the agent's public key
+is its identity. Binding proves control of that key:
 
 1. The handle owner, in an authenticated session, requests a **pairing
    code**: short, single-use, ≤10-minute expiry (e.g. `KX4-92F`).
@@ -170,10 +110,15 @@ from that key:
    needs no authentication: the code proves the handle owner initiated
    pairing; the signature proves agent control. **The binding is the
    intersection of the two proofs.**
-4. The registrar verifies the signature against the listing's public key,
-   binds, and logs the binding with its method.
+4. The registrar verifies the signature against `agent_id`, records the
+   agent (its key, and any endpoints supplied), binds the handle, and logs
+   the binding with its method.
 
-For the v0.2 profile: keys are Ed25519 expressed as nkey public strings
+The agent record is created by this step. There is no prior directory to
+look the agent up in: the signature is the record's authorization, and the
+key is the agent's address.
+
+For the v0.3 profile: keys are Ed25519 expressed as nkey public strings
 (`U…`), and signatures are base64-encoded raw Ed25519 signatures. Other key
 profiles may be added; the canonical string is versioned for this reason.
 
@@ -181,17 +126,17 @@ Replay is prevented by construction: codes are single-use and expiring, and
 the signed string includes both the code and the agent ID.
 
 **Host neutrality is normative.** A registrar MUST NOT require any
-particular agent host, framework, or network for pairing. If a listing
-declares a public key, whoever holds that key can pair. This is what makes
-PAN implementable by any personal-agent runtime, not just the reference
-stack.
+particular agent host, framework, or network for pairing. Whoever holds the
+key can pair, from any runtime. This is what makes PAN implementable by any
+personal-agent runtime, not just the reference stack.
 
-### 4.3 Domain-record binding
+### 4.2 Submitter-match
 
-A domain record entry that declares a `key` binds the handle to the listing
-bearing that key, with no pairing ceremony: the domain vouches for the
-agent, re-verifiably. If no listing with that key exists yet, the binding
-activates when one appears.
+For an agent that does not hold a key (for example, an A2A card reachable
+only by URL), the owner may submit a minimal agent record under a verified
+anchor. A handle anchored to the same email may then bind to it directly.
+The proof is that the same email both submitted the record and owns the
+name.
 
 ## 5. Resolution
 
@@ -201,34 +146,33 @@ Resolution maps a handle to its **card**.
 - Resolution MUST be publicly available without authentication for active
   handles.
 - Released handles MUST NOT resolve; registrars SHOULD signal a tombstone
-  distinctly from "never existed" in their transparency log, and MAY do so
-  at resolution.
-- A handle claimed but not yet bound resolves to its claim record without a
-  card ("reserved").
+  distinctly from "never existed" in their history log, and MAY do so at
+  resolution.
+- A handle claimed but not yet bound resolves to its claim record without an
+  address ("reserved").
 
 ### 5.1 The card
 
 ```json
 {
-  "handle":   "PublicAgent@jeffschneider.com",
-  "anchor":   "domain",                  // "email" | "domain"
-  "binding":  "domain-record",           // "email-submitter" | "agent-key" | "domain-record" | null
-  "claimed_at":  "2026-07-17T…",
-  "verified_at": "2026-07-17T…",         // domain tier: last successful re-verification
-  "stale":    false,                     // domain tier: record currently unfetchable
-  "presence": { "state": "online", "last_seen_at": "…" },   // MAY, where the registrar observes liveness
+  "handle":   "Coder.jeff@gmail.com",
+  "binding":  "agent-key",                 // "agent-key" | "email-submitter" | null
+  "claimed_at":  "2026-07-18T…",
+  "presence": { "state": "online", "last_seen_at": "…" },   // OPTIONAL, only if a source provides it
   "endpoints": [
     { "protocol": "agentmesh", "agent_id": "UD653KLV…", "node": "UB2FF…" },
     { "protocol": "a2a", "url": "https://…/.well-known/agent-card.json" }
-  ],
-  "manifest": { /* the source document, verbatim */ }
+  ]
 }
 ```
 
-The manifest is carried verbatim from its source (an AgentMesh manifest, an
-A2A agent card, a manual submission). PAN wraps existing card formats, it
-does not replace them. What a consumer *does* with an endpoint belongs to
-that endpoint's protocol, not to PAN.
+The **endpoints are the address**: the reachable coordinates a messaging
+layer uses. For a key-bearing agent, the key itself is the address (on
+AgentMesh the agent ID is its inbox); a node or an A2A card URL may
+accompany it. Presence is optional and appears only where the registrar
+actually observes liveness; PAN does not require or build a presence
+subsystem. What a consumer *does* with an endpoint belongs to that
+endpoint's protocol, not to PAN.
 
 ### 5.2 WebFinger
 
@@ -236,11 +180,11 @@ A PAN handle is a valid `acct:` URI. Registrars SHOULD serve
 **WebFinger (RFC 7033)**:
 
 ```
-GET /.well-known/webfinger?resource=acct:PublicAgent@jeffschneider.com
+GET /.well-known/webfinger?resource=acct:Coder.jeff@gmail.com
 
 {
-  "subject": "acct:PublicAgent@jeffschneider.com",
-  "properties": { "urn:pan:anchor": "domain", "urn:pan:binding": "domain-record" },
+  "subject": "acct:Coder.jeff@gmail.com",
+  "properties": { "urn:pan:binding": "agent-key" },
   "links": [ { "rel": "urn:pan:card", "type": "application/json", "href": "…/api/resolve?handle=…" } ]
 }
 ```
@@ -250,15 +194,14 @@ PAN-specific code.
 
 ## 6. The history log
 
-Every claim, binding (with its proof method), release, staleness
-transition, and refused conflict appends an entry. Entries are never
-updated or deleted.
+Every claim, binding (with its proof method), and release appends an entry.
+Entries are never updated or deleted.
 
-**The log is not public.** Email-tier handles embed the owner's address in
-the name, so a world-readable log would let anyone enumerate an owner's
-entire roster by filtering on their email. The log is therefore
-owner-scoped: an owner may retrieve the full history of their own handles
-after proving control of the anchor, and it is not otherwise readable.
+**The log is not public.** Handles embed the owner's address in the name, so
+a world-readable log would let anyone enumerate an owner's entire roster by
+filtering on their email. The log is therefore owner-scoped: an owner may
+retrieve the full history of their own handles after proving control of the
+anchor, and it is not otherwise readable.
 
 **Hash chaining is REQUIRED.** Each entry carries the SHA-256 hash of the
 previous entry, computed over a canonical serialization that includes that
@@ -279,41 +222,38 @@ future work; see §10.
 
 A conforming registrar:
 
-1. Enforces full-string uniqueness across tiers and the cooling-off window.
+1. Enforces full-string uniqueness and the cooling-off window.
 2. Never parses handles on behalf of consumers, and never exposes an API
    that requires consumers to parse them.
 3. Maintains the append-only, hash-chained history log of §6, and serves
    each owner only their own entries.
 4. Serves resolution without authentication, and labels every card with its
-   anchor tier and binding method.
-5. Re-verifies domain records on schedule and surfaces staleness honestly.
-6. Requires binding proofs per §4: email proof alone never binds to a
-   listing the anchor didn't submit.
+   binding method.
+5. Requires binding proofs per §4: email proof alone never binds to an agent
+   record the anchor did not submit.
 
 ## 8. Trust model: read this before trusting a handle
 
-Trust in PAN has two independent axes:
+**The registrar is a notary, not an oracle.** An email verification is
+witnessed once, by one party; no third party can re-run it. Everyone who
+trusts a handle is trusting the registrar's word. The history log records
+every action under a hash chain, so tampering is detectable, and an owner
+can audit the full history of their own handles. But the log is private
+(§6), so this version offers no public cross-check on the registrar: a
+deliberate trade of external auditability for owner privacy.
 
-| Axis | Weakest → strongest |
-|---|---|
-| **Anchor** (who owns the name) | `email` (witnessed once by the registrar, notarized) → `domain` (self-published, anyone can re-fetch) |
-| **Binding** (is it really that agent) | `email-submitter` (notarized) → `agent-key` (cryptographic, witnessed) → `domain-record` (cryptographic *and* re-verifiable) |
+Binding sharpens what a handle claims. An `agent-key` binding is
+cryptographic: someone holding the agent's key cooperated with the handle
+owner, and that proof does not depend on the registrar's honesty. An
+`email-submitter` binding is notarized only.
 
-**For email anchors the registrar is a notary, not an oracle.** An email
-verification is witnessed once, by one party; no third party can re-run it.
-Everyone who trusts an email-tier handle is trusting the registrar's word.
-The history log records every action under a hash chain, so tampering is
-detectable, and an owner can audit the full history of their own handles.
-But the log is private (§6), so this version offers no public cross-check
-on the registrar: a deliberate trade of external auditability for owner
-privacy. **Domain anchors remove the notary**: the proof lives at the
-domain and anyone can fetch it.
+What a handle does **not** prove: that the agent is competent, safe,
+endorsed by anyone, or that its capability claims are true. A handle is an
+address, not a badge. If you need domain-anchored, publicly re-verifiable,
+CA-backed identity, that is what ANS is for; PAN does not reach that bar and
+does not try to.
 
-What a handle does **not** prove, at any tier: that the agent is competent,
-safe, endorsed by anyone, or that its capability claims are true. A handle
-is an address, not a badge.
-
-## 9. Security considerations
+## 9. Security considerations and non-goals
 
 - **Code guessing**: registrars MUST bound verification attempts and rate-
   limit issuance (reference: 5 attempts/code, 5 codes/hour/anchor).
@@ -321,24 +261,26 @@ is an address, not a badge.
   impersonation self-labeling: `support.paypal.attacker@gmail.com` carries
   its own anchor in plain sight. Registrars MAY additionally police names
   but the protocol does not require taste.
-- **Email-costume confusion**: handles look like email addresses; mail
-  sent to one goes wherever the mail system says, which is unrelated to the
+- **Email-costume confusion**: handles look like email addresses; mail sent
+  to one goes wherever the mail system says, which is unrelated to the
   agent. Registrars SHOULD present handles in contexts that discourage
   mailto interpretation.
-- **Anchor compromise**: whoever controls the mailbox or domain controls
-  its handles; anchor hygiene (2FA, registrar-lock on domains) is
-  inherited, which is also PAN's strength: it rides the most hardened
-  credentials people already have.
-- **Domain expiry and transfer**: a lapsed domain's new owner can publish
-  new records. Staleness marking, the release grace window, and cooling-off
-  bound the damage; consumers doing high-stakes delegation SHOULD check
-  `verified_at` and the log's history for recent re-anchoring.
-- **DNS integrity**: registrars SHOULD resolve `_pan` records through a
-  validating resolver (DNSSEC where present) or DNS-over-HTTPS; well-known
-  fetches MUST use HTTPS.
+- **Anchor compromise**: whoever controls the mailbox controls its handles.
+  Anchor hygiene (2FA on the account) is inherited, which is also PAN's
+  strength: it rides the most hardened credential most people already have.
+- **Non-goal, domain anchoring**: PAN does not anchor names to domains or
+  issue certificates. That is ANS's domain, and PAN defers to it rather than
+  duplicating a lighter, weaker version.
 
 ## 10. Out of scope
 
+- **Domain-anchored identity**: names proven by DNS or well-known records,
+  CA-backed certificates, DANE. Covered by ANS.
+- **Discovery**: search and browse across agents. Covered by catalog/search
+  layers like ARD. PAN resolves a name you already have.
+- **Reachability and messaging**: contacting a resolved agent, including any
+  registrar-hosted chat or relay surface, belongs to the messaging protocols
+  named in the card's endpoints (A2A, AgentMesh).
 - **Federation**: multiple registrars, referral resolution, cross-registrar
   uniqueness.
 - **Additional anchor proofs**: e.g. OIDC sign-in as a mailbox proof.
@@ -346,18 +288,12 @@ is an address, not a badge.
   confirm the registrar has not rewritten history without exposing who owns
   what (e.g. Merkle commitments / SCITT-style inclusion proofs over the §6
   chain).
-- **Reachability and messaging**: contacting a resolved agent, including
-  any registrar-hosted chat or relay surface, belongs to the messaging
-  protocols named in the card's endpoints.
 
 ## 11. Reference implementation
 
-The Agent Catalog (this repository) is the reference registrar. At time of
-writing, live and verified end-to-end: email-tier claiming, §4.1/§4.2
-binding (submitter-match and agent-key pairing), §5 resolution (card +
-WebFinger), and the §6 hash-chained, owner-scoped history log.
-The §3.2 domain tier is implemented (well-known + DNS-over-HTTPS fetch,
-sync, staleness transitions) and verified against a local record; live
-verification against a public domain is pending. The AgentMesh Rust SDK
-carries `examples/pan_pair.rs`, a standalone pairing signer demonstrating
-§4.2 without any particular agent host.
+The Agent Catalog (this repository) is the reference registrar. Live and
+verified end-to-end: email-tier claiming, §4.1 agent-key pairing (with the
+agent record created from the signed pairing), §5 resolution (card +
+WebFinger), and the §6 hash-chained, owner-scoped history log. The AgentMesh
+Rust SDK carries `examples/pan_pair.rs`, a standalone pairing signer
+demonstrating §4.1 without any particular agent host.

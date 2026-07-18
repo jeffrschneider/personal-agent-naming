@@ -45,21 +45,3 @@ pub struct SubmitListing {
     pub source_id: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct SearchQuery {
-    /// Full-text query over name + description.
-    #[serde(default)]
-    pub q: Option<String>,
-    /// Exact specialty claim filter, e.g. "access:hubspot-api".
-    #[serde(default)]
-    pub specialty: Option<String>,
-    #[serde(default)]
-    pub protocol: Option<String>,
-    #[serde(default)]
-    pub source: Option<String>,
-    /// "online" filters to listings with live presence.
-    #[serde(default)]
-    pub presence: Option<String>,
-    #[serde(default)]
-    pub limit: Option<i64>,
-}

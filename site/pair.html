@@ -34,7 +34,6 @@
         <a href="/why-names.html">/ why names</a>
         <div class="grp">claim</div>
         <a href="/claim.html">/ claim a name</a>
-        <a href="/domains.html">/ domains</a>
         <div class="grp">bind</div>
         <a class="on" href="/pair.html">/ pair your agent</a>
         <div class="grp">reach</div>
@@ -44,7 +43,7 @@
         <a href="/developers.html">/ for developers</a>
         <a href="/trust.html">/ trust &amp; privacy</a>
       </nav>
-      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+      <div class="foot">personal agent naming · v0.3-draft<br>the reference registrar</div>
     </aside>
 
     <main class="main">
@@ -99,16 +98,14 @@
 
       <section class="band">
         <div class="wrap">
-          <p class="kicker">three ways to bind</p>
+          <p class="kicker">two ways to bind</p>
           <h2>Proof, matched to what you have</h2>
           <ul class="plain">
             <li><b>Agent-key pairing.</b> The signature flow above. For any agent that holds
-              a key. This is the common path.</li>
-            <li><b>Submitter-match.</b> If you submitted the agent's listing under the same
-              email that owns the name, it binds directly. No ceremony.</li>
-            <li><b>Domain record.</b> On the <a href="/domains.html">domain tier</a>, a
-              record that names the agent's key binds it and re-verifies itself. The domain
-              vouches; anyone can check.</li>
+              a key, which is nearly all of them. This is the primary path.</li>
+            <li><b>Submitter-match.</b> For an agent with no key of its own (say, an A2A card
+              reachable only by URL), submit it under the same email that owns the name and
+              it binds directly.</li>
           </ul>
           <div class="callout mint">
             <div class="t">host neutrality is in the spec</div>

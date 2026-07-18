@@ -1,15 +1,11 @@
-//! Agent Catalog — an ARD-compliant, presence-aware catalog of agents.
+//! PAN registrar — the reference registrar for Personal Agent Naming.
 //!
-//! The catalog indexes, verifies, and shows liveness; it never hosts agents.
-//! Data enters through connectors (AgentMesh, A2A cards, manual submission);
-//! this binary is the storage + search + read API core that connectors feed.
-//!
-//! v0 surface: health, listing search/read, manual submission. The mesh
-//! harvester, probe runner, and ARD read interface build on this.
+//! It does one thing: claim a name (email anchor), bind it to an agent
+//! (agent-key pairing), and resolve it to a card. No discovery, no
+//! harvesting, no domain tier, no messaging. See PAN-SPEC.md.
 
 mod api;
 mod db;
-mod mesh;
 mod model;
 mod registrar;
 mod store;
@@ -36,29 +32,7 @@ async fn main() {
 
     let pool = store::connect_with_retry(&db_url).await;
     store::migrate(&pool).await.expect("migrations failed");
-    log::info!("[catalog] database ready");
-
-    // Domain-tier re-verification (PAN §3.2): re-sync every known domain
-    // daily; staleness and release transitions happen in the sweep.
-    {
-        let sweep_pool = pool.clone();
-        tokio::spawn(async move {
-            loop {
-                registrar::domain_sweep(&sweep_pool).await;
-                tokio::time::sleep(std::time::Duration::from_secs(24 * 3600)).await;
-            }
-        });
-    }
-
-    // Source connectors. AgentMesh is the first; each runs as a background
-    // task feeding the same listings/presence tables the API serves.
-    match mesh::config_from_env() {
-        Some(cfg) => {
-            log::info!("[catalog] AgentMesh connector enabled: {}", cfg.nats_url);
-            tokio::spawn(mesh::run(pool.clone(), cfg));
-        }
-        None => log::info!("[catalog] AgentMesh connector disabled (MESH_NATS_URL not set)"),
-    }
+    log::info!("[pan] database ready");
 
     let app = api::router(pool);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

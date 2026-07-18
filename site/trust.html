@@ -27,7 +27,6 @@
         <a href="/why-names.html">/ why names</a>
         <div class="grp">claim</div>
         <a href="/claim.html">/ claim a name</a>
-        <a href="/domains.html">/ domains</a>
         <div class="grp">bind</div>
         <a href="/pair.html">/ pair your agent</a>
         <div class="grp">reach</div>
@@ -37,7 +36,7 @@
         <a href="/developers.html">/ for developers</a>
         <a class="on" href="/trust.html">/ trust &amp; privacy</a>
       </nav>
-      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+      <div class="foot">personal agent naming · v0.3-draft<br>the reference registrar</div>
     </aside>
 
     <main class="main">
@@ -52,12 +51,13 @@
       <section class="band">
         <div class="wrap">
           <p class="kicker">what happened, exactly</p>
-          <h2>Trusting an email-tier handle</h2>
-          <p>For an email-tier handle, here is precisely what the registrar witnessed:
-            someone proved control of an inbox, once. No third party can re-run that check,
-            so trusting the handle means trusting the registrar's word. The
-            <a href="/domains.html">domain tier</a> removes the notary entirely: the proof
-            lives at the domain, and anyone can re-fetch it.</p>
+          <h2>Trusting a handle</h2>
+          <p>Here is precisely what the registrar witnessed: someone proved control of an
+            inbox, once. No third party can re-run that check, so trusting the handle means
+            trusting the registrar's word, disciplined by the hash-chained log below. If you
+            need domain-anchored, publicly re-verifiable, CA-backed identity, that is what
+            <a href="https://datatracker.ietf.org/doc/draft-narajala-courtney-ansv2/">ANS</a>
+            is for. PAN does not reach that bar and does not try to.</p>
           <p class="pull">A handle is an address, not a badge.</p>
         </div>
       </section>

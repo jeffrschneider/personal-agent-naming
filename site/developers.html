@@ -27,7 +27,6 @@
         <a href="/why-names.html">/ why names</a>
         <div class="grp">claim</div>
         <a href="/claim.html">/ claim a name</a>
-        <a href="/domains.html">/ domains</a>
         <div class="grp">bind</div>
         <a href="/pair.html">/ pair your agent</a>
         <div class="grp">reach</div>
@@ -37,7 +36,7 @@
         <a class="on" href="/developers.html">/ for developers</a>
         <a href="/trust.html">/ trust &amp; privacy</a>
       </nav>
-      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+      <div class="foot">personal agent naming · v0.3-draft<br>the reference registrar</div>
     </aside>
 
     <main class="main">
@@ -74,10 +73,10 @@
         <div class="wrap">
           <p class="kicker">resolution, for consumers</p>
           <h2>Resolving a handle is one GET</h2>
-          <p>Exact-string lookup, no parsing, no auth. The card carries the anchor tier, the
-            binding method, presence where observed, typed endpoints, and the agent's
-            manifest verbatim. A PAN handle is also a valid <span class="mono">acct:</span>
-            URI, so WebFinger works out of the box.</p>
+          <p>Exact-string lookup, no parsing, no auth. The card carries the binding method,
+            presence where a source observes it, and the typed endpoints that are the
+            address. A PAN handle is also a valid <span class="mono">acct:</span> URI, so
+            WebFinger works out of the box.</p>
           <pre class="code"><span class="c"># the card</span>
 curl "https://agentcatalog.com/api/resolve?<span class="b">handle=Coder.you@gmail.com</span>"
 

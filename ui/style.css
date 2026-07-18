@@ -281,4 +281,7 @@ a.brand { color: var(--text); }
 .profile .d-sub { margin: .35rem 0 1rem; }
 .profile details.manifest > summary { cursor: pointer; color: var(--muted); font-size: .82rem; }
 
+.profile .ep { font-size: .84rem; padding: .35rem 0; border-bottom: 1px solid var(--border); }
+.profile .ep:last-child { border-bottom: none; }
+
 [hidden] { display: none !important; }

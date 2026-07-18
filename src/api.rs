@@ -13,26 +13,23 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::model::{SearchQuery, SubmitListing};
+use crate::model::SubmitListing;
 use crate::registrar::{self, RegistrarError};
 use crate::store;
 
 pub fn router(pool: PgPool) -> Router {
     Router::new()
         .route("/", get(ui_index))
-        .route("/browse", get(ui_index))
         .route("/spec", get(spec_page))
         .route("/spec.md", get(spec_raw))
         .route("/ui/style.css", get(ui_css))
         .route("/ui/app.js", get(ui_js))
         .route("/healthz", get(healthz))
-        .route("/api/stats", get(stats))
-        .route("/api/listings", get(list).post(submit))
+        .route("/api/listings", post(submit))
         .route("/api/listings/:id", get(get_one))
         .route("/api/resolve", get(resolve_handle))
         .route("/.well-known/webfinger", get(webfinger))
         .route("/api/listings/mine", get(listings_mine))
-        .route("/api/domains/sync", post(domains_sync))
         .route("/api/pair/start", post(pair_start))
         .route("/api/pair/complete", post(pair_complete))
         .route("/api/handles/start", post(handles_start))
@@ -103,23 +100,8 @@ async fn ui_js() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) 
     ([(axum::http::header::CONTENT_TYPE, "text/javascript")], include_str!("../ui/app.js"))
 }
 
-async fn stats(State(pool): State<PgPool>) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let (total, online) = store::stats(&pool).await.map_err(internal)?;
-    Ok(Json(serde_json::json!({ "ok": true, "total": total, "online": online })))
-}
-
 async fn healthz() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "ok": true, "version": env!("CARGO_PKG_VERSION") }))
-}
-
-async fn list(
-    State(pool): State<PgPool>,
-    Query(q): Query<SearchQuery>,
-) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let listings = store::search(&pool, &q)
-        .await
-        .map_err(internal)?;
-    Ok(Json(serde_json::json!({ "ok": true, "count": listings.len(), "listings": listings })))
 }
 
 async fn get_one(
@@ -334,21 +316,6 @@ async fn handles_mine(
 }
 
 #[derive(Deserialize)]
-struct DomainSyncBody {
-    domain: String,
-}
-
-/// Unauthenticated by design (PAN §3.2): the published record is the
-/// authorization — only the domain's controller could have put it there.
-async fn domains_sync(
-    State(pool): State<PgPool>,
-    Json(body): Json<DomainSyncBody>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let summary = registrar::sync_domain(&pool, &body.domain).await.map_err(reg_err)?;
-    Ok(Json(serde_json::json!({ "ok": true, "sync": summary })))
-}
-
-#[derive(Deserialize)]
 struct PairStartBody {
     handle: String,
 }
@@ -383,11 +350,13 @@ async fn pair_complete(
     Ok(Json(serde_json::json!({ "ok": true, "handle": handle })))
 }
 
-/// The PAN card (§5.1): envelope + typed endpoints + verbatim manifest.
+/// The PAN card (§5.1): the endpoints are the address. Presence is optional
+/// and only present when the registrar actually observes it.
 fn build_card(h: &registrar::Handle, listing: Option<&crate::model::Listing>) -> serde_json::Value {
     let mut endpoints: Vec<serde_json::Value> = Vec::new();
     if let Some(l) = listing {
-        if l.source == "agentmesh" {
+        // A key-bearing agent: the key is the address (its mesh inbox).
+        if matches!(l.source.as_str(), "agent" | "agentmesh") {
             endpoints.push(serde_json::json!({
                 "protocol": "agentmesh",
                 "agent_id": l.source_id,
@@ -397,19 +366,19 @@ fn build_card(h: &registrar::Handle, listing: Option<&crate::model::Listing>) ->
             endpoints.push(serde_json::json!({ "protocol": l.protocol, "url": url }));
         }
     }
+    // Presence only where observed; PAN builds no presence subsystem.
+    let presence = listing.and_then(|l| {
+        l.presence.as_ref().map(|state| serde_json::json!({
+            "state": state, "last_seen_at": l.last_seen_at,
+        }))
+    });
     serde_json::json!({
         "handle": h.handle,
-        "anchor": h.anchor,
         "binding": h.bind_method,
         "claimed_at": h.created_at,
-        "verified_at": h.verified_at,
-        "stale": h.stale,
         "reserved": listing.is_none(),
-        "presence": listing.map(|l| serde_json::json!({
-            "state": l.presence, "last_seen_at": l.last_seen_at,
-        })),
+        "presence": presence,
         "endpoints": endpoints,
-        "manifest": listing.map(|l| l.manifest.clone()),
     })
 }
 
@@ -465,7 +434,6 @@ async fn webfinger(
     let jrd = serde_json::json!({
         "subject": format!("acct:{}", h.handle),
         "properties": {
-            "urn:pan:anchor": h.anchor,
             "urn:pan:binding": h.bind_method,
         },
         "links": [{
