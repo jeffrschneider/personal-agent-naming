@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Send your agent: Personal Agent Naming</title>
+  <meta name="description" content="Agents that can run commands (Claude Code, OpenClaw, coding agents) can get themselves a PAN handle: point yours at the executable runbook and approve one email code.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .prompt-box{ background:#0b1220; border:1px solid var(--line); border-radius:12px; padding:16px 18px;
+      font-family:var(--wire); font-size:.86rem; line-height:1.7; color:var(--paper); max-width:680px; margin:22px 0 6px;
+      overflow-x:auto; }
+    .prompt-box .u{ color:var(--address); }
+    .stages{ margin:22px 0 0; padding-left:0; list-style:none; max-width:66ch; counter-reset:st; }
+    .stages li{ margin:12px 0; padding-left:44px; position:relative; color:var(--dim); counter-increment:st; }
+    .stages li::before{ content:"0" counter(st); position:absolute; left:0; top:1px;
+      font-family:var(--wire); font-size:.8rem; color:var(--signal); }
+    .stages li b{ color:var(--paper); }
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <aside class="rail">
+      <a class="brand" href="/"><span class="dot"></span>PAN</a>
+      <nav>
+        <div class="grp">overview</div>
+        <a href="/">/ what PAN is</a>
+        <a href="/why-names.html">/ why names</a>
+        <a class="on" href="/agent-setup.html">/ send your agent</a>
+        <div class="grp">claim</div>
+        <a href="/claim.html">/ claim a name</a>
+        <div class="grp">bind</div>
+        <a href="/pair.html">/ pair your agent</a>
+        <div class="grp">reach</div>
+        <a href="/reach.html">/ resolve &amp; reach</a>
+        <div class="grp">reference</div>
+        <a href="/spec">/ the spec</a>
+        <a href="/developers.html">/ for developers</a>
+        <a href="/trust.html">/ trust &amp; privacy</a>
+        <a href="/comparison.html">/ pan &amp; ans</a>
+      </nav>
+      <div class="foot">personal agent naming · v0.3-draft<br>the reference registrar</div>
+    </aside>
+
+    <main class="main">
+
+      <div class="wrap hero">
+        <span class="eyebrow"><span class="tag">shortcut</span> · for agents that run commands</span>
+        <h1>Don't do the setup.<br><span style="color:var(--signal)">Send your agent.</span></h1>
+        <p class="lede">Claude Code, OpenClaw, and most coding agents can run commands and
+          call APIs. So let yours do its own onboarding: point it at the runbook below and
+          it will claim its name, install the adapter, pair, and verify, pausing exactly
+          once to ask you for a code from your inbox.</p>
+      </div>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the one instruction</p>
+          <h2>Paste this into your agent</h2>
+          <div class="prompt-box">Fetch <span class="u">https://agentcatalog.com/agent-setup.md</span> and follow it. It is an executable runbook that gets you a Personal Agent Name and makes you reachable. Confirm with me before installing or running anything, exactly as it instructs.</div>
+          <p style="color:var(--faint); font-family:var(--wire); font-size:.78rem; margin-top:10px;">or open <a href="/agent-setup.md">/agent-setup.md</a> yourself and paste the whole thing.</p>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">what will happen</p>
+          <h2>Five stages, one moment for you</h2>
+          <ol class="stages">
+            <li><b>Consent.</b> The runbook's first instruction is to stop and get your
+              approval: it installs a small local program, keeps it running, and makes the
+              agent publicly reachable. Nothing runs before you say so.</li>
+            <li><b>Claim.</b> The agent claims <span class="mono amber">Name.you@email.com</span>
+              through the registrar API. <b>Your moment:</b> a verification code lands in
+              your inbox and you read it to the agent. It never touches your inbox and is
+              told not to ask for credentials.</li>
+            <li><b>Reachable.</b> It starts the
+              <a href="https://agentmesh.ai/adapter.html">mesh-adapter</a>, the thin
+              AgentMesh node: one command, message in on stdin, reply out on stdout.</li>
+            <li><b>Paired.</b> It fetches a pairing code and signs it with its own key.
+              The name now provably points at your agent.</li>
+            <li><b>Verified.</b> It resolves the handle, sends itself a test message, and
+              reports back with the name you can start handing out.</li>
+          </ol>
+          <div class="callout mint">
+            <div class="t">why this is safe to hand to an agent</div>
+            <p>Every command in the runbook is exact and was run end to end before
+              publishing. The only secret involved is a single-use emailed code that you
+              relay yourself. Stopping the adapter process later un-publishes nothing and
+              breaks nothing: the name and identity survive restarts.</p>
+          </div>
+          <div class="cta">
+            <a class="btn btn-signal" href="/agent-setup.md">the runbook →</a>
+            <a class="btn btn-ghost" href="/pair.html">prefer to do it by hand? →</a>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="wrap">
+          <span>Personal Agent Naming · the reference registrar</span>
+          <a href="/spec">the spec</a>
+          <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          <a href="https://agentmesh.ai">AgentMesh ↗</a>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+</body>
+</html>
