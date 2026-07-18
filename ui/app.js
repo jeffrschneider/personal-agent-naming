@@ -1,5 +1,8 @@
-// PAN registrar UI. Two surfaces: lookup (a handle in, its card out) and
-// my-handles (claim / pair / release). Plain JS against the JSON API.
+// PAN registrar app. Console-first: the default surface is YOUR agent names
+// (a roster with add / pair / release, like a registrar's record table), gated
+// by the email-code sign-in. Public lookup is the secondary surface. Plain JS
+// against the JSON API; session persists in localStorage until the server
+// says 401 (sessions are short-lived by design).
 
 "use strict";
 
@@ -25,8 +28,246 @@ function copyText(t, el) {
     setTimeout(() => { el.textContent = prev; }, 1200);
   }).catch((e) => console.log("[pan:ui] copy failed", e));
 }
+function msgAt(id, text, isErr) {
+  const el = $(id);
+  el.textContent = text || "";
+  el.classList.toggle("err", !!isErr);
+}
 
-// ── lookup ────────────────────────────────────────────────────────────────
+// ── session (localStorage until the server 401s) ────────────────────────────
+let session = null;
+try { session = JSON.parse(localStorage.getItem("pan_session")); } catch { /* fresh */ }
+function saveSession(s) {
+  session = s;
+  if (s) localStorage.setItem("pan_session", JSON.stringify(s));
+  else localStorage.removeItem("pan_session");
+}
+function authHeaders() {
+  return { "Content-Type": "application/json", Authorization: "Bearer " + session.token };
+}
+function sessionExpired() {
+  saveSession(null);
+  render();
+}
+
+// ── views ───────────────────────────────────────────────────────────────────
+function showView(which) {
+  $("view-console").hidden = which !== "console";
+  $("view-lookup").hidden = which !== "lookup";
+}
+$("nav-lookup").addEventListener("click", (e) => { e.preventDefault(); showView("lookup"); $("lk-input").focus(); });
+$("nav-console").addEventListener("click", (e) => {
+  e.preventDefault();
+  const url = new URL(location); url.searchParams.delete("h");
+  history.replaceState(null, "", url);
+  showView("console");
+});
+
+// ── the console ─────────────────────────────────────────────────────────────
+let operatorName = null;
+
+function render() {
+  const signedIn = !!session;
+  $("gate").hidden = signedIn;
+  $("console").hidden = !signedIn;
+  $("who").hidden = !signedIn;
+  $("sign-out").hidden = !signedIn;
+  if (signedIn) {
+    $("who").textContent = session.email;
+    loadConsole();
+  } else {
+    $("gate-email").hidden = false;
+    $("gate-code").hidden = true;
+  }
+}
+
+$("sign-out").addEventListener("click", () => { saveSession(null); render(); });
+
+$("claim-send").addEventListener("click", async () => {
+  const email = $("claim-email").value.trim();
+  msgAt("email-msg", "Sending…");
+  const r = await fetch("/api/handles/start", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const d = await r.json();
+  if (!d.ok) { msgAt("email-msg", d.error, true); return; }
+  $("code-email").textContent = d.email;
+  $("gate-email").hidden = true;
+  $("gate-code").hidden = false;
+  msgAt("code-msg", d.delivery === "console"
+    ? "Dev mode: the code is in the registrar's console log."
+    : "Check your inbox.");
+  $("claim-code").focus();
+});
+
+$("claim-verify").addEventListener("click", async () => {
+  const email = $("code-email").textContent;
+  const code = $("claim-code").value.trim();
+  const r = await fetch("/api/handles/verify", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+  const d = await r.json();
+  if (!d.ok) { msgAt("code-msg", d.error, true); return; }
+  $("claim-code").value = "";
+  saveSession({ token: d.token, email });
+  render();
+});
+
+/** The agent-name part of a handle owned by this session's email. */
+function namePart(handle) {
+  const suffix = "." + session.email;
+  return handle.toLowerCase().endsWith(suffix.toLowerCase())
+    ? handle.slice(0, handle.length - suffix.length)
+    : handle;
+}
+
+async function loadConsole() {
+  let r;
+  try {
+    r = await fetch("/api/handles/mine", { headers: authHeaders() });
+  } catch { return; }
+  if (r.status === 401) { sessionExpired(); return; }
+  const d = await r.json();
+
+  // operator line (parallel-ish; cheap)
+  fetch("/api/operator", { headers: authHeaders() })
+    .then((r2) => r2.json())
+    .then((o) => {
+      operatorName = o.ok ? o.name : null;
+      $("op-line").hidden = !operatorName;
+      if (operatorName) $("op-current").textContent = operatorName;
+      $("op-field").hidden = !!operatorName;
+      if (operatorName) $("op-name").value = operatorName;
+    })
+    .catch(() => {});
+
+  const handles = d.handles || [];
+  $("names-table").hidden = handles.length === 0;
+  $("names-empty").hidden = handles.length !== 0;
+  $("empty-preview").textContent = `Name.${session.email}`;
+
+  $("names-body").innerHTML = handles.map((h) => `
+    <tr>
+      <td class="nm">${esc(namePart(h.handle))}</td>
+      <td><span class="handle-chip js-copy" data-h="${esc(h.handle)}" title="Copy handle">${esc(h.handle)}</span></td>
+      <td>${h.listing_id
+        ? `<span class="seal good">bound · ${esc(h.bind_method || "")}</span>`
+        : `<span class="seal">reserved</span>`}</td>
+      <td class="ta-r row-actions">
+        <button class="row-act pair-btn" data-h="${esc(h.handle)}" title="Point this name at your agent">pair</button>
+        <button class="row-act card-btn" data-h="${esc(h.handle)}" title="View the public card">card</button>
+        <button class="row-act rel" data-h="${esc(h.handle)}" title="Release (90-day cooling-off)">release</button>
+      </td>
+    </tr>`).join("");
+
+  for (const el of $("names-body").querySelectorAll(".js-copy"))
+    el.addEventListener("click", () => copyText(el.dataset.h, el));
+
+  for (const b of $("names-body").querySelectorAll(".card-btn"))
+    b.addEventListener("click", () => {
+      const url = new URL(location); url.searchParams.set("h", b.dataset.h);
+      history.replaceState(null, "", url);
+      showView("lookup");
+      $("lk-input").value = b.dataset.h;
+      lookup(b.dataset.h);
+    });
+
+  for (const b of $("names-body").querySelectorAll(".rel"))
+    b.addEventListener("click", async () => {
+      if (!confirm(`Release ${b.dataset.h}?\n\nIt stops resolving, and nobody (including you) can claim it again for 90 days.`)) return;
+      const r2 = await fetch("/api/handles/release", {
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ handle: b.dataset.h }),
+      });
+      if (r2.status === 401) { sessionExpired(); return; }
+      loadConsole();
+    });
+
+  for (const b of $("names-body").querySelectorAll(".pair-btn"))
+    b.addEventListener("click", async () => {
+      const r2 = await fetch("/api/pair/start", {
+        method: "POST", headers: authHeaders(),
+        body: JSON.stringify({ handle: b.dataset.h }),
+      });
+      if (r2.status === 401) { sessionExpired(); return; }
+      const d2 = await r2.json();
+      const info = $("pair-info");
+      info.hidden = false;
+      if (!d2.ok) { info.textContent = d2.error; info.classList.add("err"); return; }
+      info.classList.remove("err");
+      info.innerHTML = `Pairing code for <span class="mono">${esc(b.dataset.h)}</span>:
+        <b class="mono big">${esc(d2.code)}</b> <span class="muted">(single-use, expires in 10 minutes)</span><br>
+        If the agent runs behind the mesh-adapter, run:<br>
+        <span class="mono block">mesh-adapter pair ${esc(b.dataset.h)} ${esc(d2.code)}</span>
+        Any other host signs <span class="mono">pan-pair-v1:${esc(d2.code)}:&lt;agent-id&gt;</span>
+        and posts it to <span class="mono">/api/pair/complete</span>. The name binds the moment it lands.`;
+    });
+}
+
+// ── add an agent name ───────────────────────────────────────────────────────
+function openAdd() {
+  $("add-form").hidden = false;
+  $("op-field").hidden = !!operatorName;
+  $("claim-name").focus();
+  updatePreview();
+}
+function closeAdd() {
+  $("add-form").hidden = true;
+  $("claim-name").value = "";
+  msgAt("claim-msg", "");
+  updatePreview();
+}
+$("add-open").addEventListener("click", openAdd);
+$("add-close").addEventListener("click", closeAdd);
+
+function updatePreview() {
+  const name = $("claim-name").value.trim();
+  $("handle-preview").textContent = name && session ? `${name}.${session.email}` : "";
+}
+$("claim-name").addEventListener("input", updatePreview);
+
+$("op-edit").addEventListener("click", (e) => {
+  e.preventDefault();
+  openAdd();
+  $("op-field").hidden = false;
+  $("op-name").focus();
+});
+
+$("claim-do").addEventListener("click", async () => {
+  const name = $("claim-name").value.trim();
+  const opName = $("op-name").value.trim();
+  if (!operatorName && !opName) {
+    msgAt("claim-msg", "Your public name is required: it is shown on your handles' cards.", true);
+    return;
+  }
+  // Change-operator-only path: name field empty but operator edited.
+  if (!name && opName && opName !== operatorName) {
+    const r0 = await fetch("/api/operator", {
+      method: "POST", headers: authHeaders(), body: JSON.stringify({ name: opName }),
+    });
+    if (r0.status === 401) { sessionExpired(); return; }
+    const d0 = await r0.json();
+    if (!d0.ok) { msgAt("claim-msg", d0.error, true); return; }
+    closeAdd();
+    loadConsole();
+    return;
+  }
+  msgAt("claim-msg", "Claiming…");
+  const body = { name };
+  if (opName && opName !== operatorName) body.operator_name = opName;
+  const r = await fetch("/api/handles/claim", {
+    method: "POST", headers: authHeaders(), body: JSON.stringify(body),
+  });
+  if (r.status === 401) { sessionExpired(); return; }
+  const d = await r.json();
+  if (!d.ok) { msgAt("claim-msg", d.error, true); return; }
+  closeAdd();
+  loadConsole();
+});
+
+// ── lookup (the public card) ────────────────────────────────────────────────
 function endpointLine(e) {
   if (e.protocol === "agentmesh") {
     return `agentmesh · agent <span class="mono">${esc(e.agent_id || "")}</span>` +
@@ -56,15 +297,17 @@ async function lookup(handle) {
   }
   const d = await r.json();
   const c = d.card || {};
-  // Shareable: ?h=<handle>
   const url = new URL(location);
   url.searchParams.set("h", c.handle || handle);
   history.replaceState(null, "", url);
 
+  const operator = c.operator && c.operator.name
+    ? `<div class="d-sub">operated by <b>${esc(c.operator.name)}</b> <span class="muted">(their chosen label, anchored to their verified email)</span></div>`
+    : "";
   if (c.reserved) {
     msg.textContent = "";
     card.innerHTML = `<div class="d-head"><h2>${esc(c.handle)}</h2></div>
-      ${c.operator && c.operator.name ? `<div class="d-sub">operated by <b>${esc(c.operator.name)}</b> <span class="muted">(their chosen label)</span></div>` : ""}
+      ${operator}
       <div class="d-sub muted">Claimed, but no agent bound yet. It resolves to a reservation.</div>`;
     card.hidden = false;
     return;
@@ -81,7 +324,7 @@ async function lookup(handle) {
       <span class="handle-chip js-copy-handle" data-handle="${esc(c.handle)}" title="Copy handle">${esc(c.handle)}</span>
       ${presence}
     </div>
-    ${c.operator && c.operator.name ? `<div class="d-sub">operated by <b>${esc(c.operator.name)}</b> <span class="muted">(their chosen label, anchored to their verified email)</span></div>` : ""}
+    ${operator}
     <div class="d-section"><h3>Binding</h3>
       <div>${c.binding ? `<span class="seal good">${esc(c.binding)}</span>` : `<span class="muted">unbound</span>`}
         <span class="muted" style="margin-left:.5rem">claimed ${ago(c.claimed_at) || ""}</span></div>
@@ -103,143 +346,14 @@ $("lk-btn").addEventListener("click", () => {
 $("lk-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") { const h = $("lk-input").value.trim(); if (h) lookup(h); }
 });
+
+// ── boot ────────────────────────────────────────────────────────────────────
 const deepHandle = params.get("h");
-if (deepHandle) { $("lk-input").value = deepHandle; lookup(deepHandle); }
-
-// ── my handles (claim / pair / release) ────────────────────────────────────
-const claimModal = $("claim-modal"), claimScrim = $("claim-scrim");
-let session = null;
-
-function showStep(id) {
-  for (const s of claimModal.querySelectorAll(".claim-step")) s.hidden = s.id !== id;
+if (deepHandle) {
+  showView("lookup");
+  $("lk-input").value = deepHandle;
+  lookup(deepHandle);
+} else {
+  showView("console");
 }
-function claimMsg(id, text, isErr) {
-  const el = $(id);
-  el.textContent = text || "";
-  el.classList.toggle("err", !!isErr);
-}
-function openClaim() {
-  claimModal.hidden = false;
-  claimScrim.hidden = false;
-  showStep(session ? "step-shelf" : "step-email");
-  if (session) loadShelf();
-}
-function closeClaim() { claimModal.hidden = true; claimScrim.hidden = true; }
-$("claim-open").addEventListener("click", openClaim);
-$("claim-close").addEventListener("click", closeClaim);
-claimScrim.addEventListener("click", closeClaim);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeClaim(); });
-
-$("claim-send").addEventListener("click", async () => {
-  const email = $("claim-email").value.trim();
-  claimMsg("email-msg", "Sending…");
-  const r = await fetch("/api/handles/start", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const d = await r.json();
-  if (!d.ok) { claimMsg("email-msg", d.error, true); return; }
-  $("code-email").textContent = d.email;
-  showStep("step-code");
-  claimMsg("code-msg", d.delivery === "console"
-    ? "Dev mode: the code is in the registrar's console log."
-    : "Check your inbox.");
-  $("claim-code").focus();
-});
-
-$("claim-verify").addEventListener("click", async () => {
-  const email = $("code-email").textContent;
-  const code = $("claim-code").value.trim();
-  const r = await fetch("/api/handles/verify", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code }),
-  });
-  const d = await r.json();
-  if (!d.ok) { claimMsg("code-msg", d.error, true); return; }
-  session = { token: d.token, email };
-  showStep("step-shelf");
-  loadShelf();
-  loadOperator();
-});
-
-async function loadOperator() {
-  const r = await fetch("/api/operator", { headers: { Authorization: "Bearer " + session.token } });
-  const d = await r.json().catch(() => ({}));
-  if (d.ok && d.name) $("op-name").value = d.name;
-}
-
-async function loadShelf() {
-  const r = await fetch("/api/handles/mine", { headers: { Authorization: "Bearer " + session.token } });
-  const d = await r.json();
-  if (r.status === 401) { session = null; showStep("step-email"); return; }
-  const rows = (d.handles || []).map((h) => `
-    <div class="mh-row">
-      <span class="mono">${esc(h.handle)}</span>
-      ${h.listing_id
-        ? `<span class="muted">${esc(h.bind_method || "bound")}</span>`
-        : `<span class="muted">reserved</span>`}
-      <button class="pair-btn" data-h="${esc(h.handle)}" title="Attach your agent by pairing">pair</button>
-      <button class="rel" data-h="${esc(h.handle)}">release</button>
-    </div>`).join("");
-  $("my-handles").innerHTML = rows
-    ? `<div class="mh-head">Your handles</div>${rows}<div id="pair-info" class="claim-msg"></div>`
-    : "";
-  for (const b of $("my-handles").querySelectorAll(".rel")) {
-    b.addEventListener("click", async () => {
-      await fetch("/api/handles/release", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
-        body: JSON.stringify({ handle: b.dataset.h }),
-      });
-      loadShelf();
-    });
-  }
-  for (const b of $("my-handles").querySelectorAll(".pair-btn")) {
-    b.addEventListener("click", async () => {
-      const r2 = await fetch("/api/pair/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
-        body: JSON.stringify({ handle: b.dataset.h }),
-      });
-      const d2 = await r2.json();
-      const info = $("pair-info");
-      if (!d2.ok) { info.textContent = d2.error; info.classList.add("err"); return; }
-      info.classList.remove("err");
-      info.innerHTML = `Pairing code <b class="mono">${esc(d2.code)}</b>, expires in 10 minutes.<br>
-        Have your agent's host sign <span class="mono">pan-pair-v1:${esc(d2.code)}:&lt;agent-id&gt;</span>
-        and send it to <span class="mono">POST /api/pair/complete</span>. The handle binds the moment it lands.`;
-    });
-  }
-}
-
-function updatePreview() {
-  const name = $("claim-name").value.trim();
-  $("handle-preview").textContent = name && session ? `${name}.${session.email}` : "";
-}
-$("claim-name").addEventListener("input", updatePreview);
-
-$("claim-do").addEventListener("click", async () => {
-  const name = $("claim-name").value.trim();
-  const operatorName = $("op-name").value.trim();
-  if (!operatorName) { claimMsg("claim-msg", "Your public name is required: it is shown on your handles' cards.", true); return; }
-  claimMsg("claim-msg", "Claiming…");
-  const r = await fetch("/api/handles/claim", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
-    body: JSON.stringify({ name, operator_name: operatorName }),
-  });
-  const d = await r.json();
-  if (r.status === 401) { session = null; showStep("step-email"); return; }
-  if (!d.ok) { claimMsg("claim-msg", d.error, true); return; }
-  $("done-handle").textContent = d.handle;
-  showStep("step-done");
-});
-
-$("done-copy").addEventListener("click", (e) => copyText($("done-handle").textContent, e.currentTarget));
-$("done-another").addEventListener("click", () => {
-  $("claim-name").value = "";
-  showStep("step-shelf");
-  loadShelf();
-});
-
-if (params.get("claim") === "1") openClaim();
+render();
