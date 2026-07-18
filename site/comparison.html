@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PAN and ANS: Personal Agent Naming</title>
+  <meta name="description" content="PAN and ANS both name agents, for different worlds. ANS is the heavyweight enterprise identity layer; PAN is the lightweight naming layer for personal agents.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .cmp-wrap{ overflow-x:auto; margin:24px 0 6px; border:1px solid var(--line); border-radius:12px; }
+    table.cmp{ width:100%; border-collapse:collapse; font-size:.9rem; min-width:640px; }
+    table.cmp th, table.cmp td{ text-align:left; padding:13px 16px; border-bottom:1px solid var(--line); vertical-align:top; }
+    table.cmp thead th{ font-family:var(--wire); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase;
+      color:var(--faint); background:rgba(255,255,255,.015); }
+    table.cmp thead th.pan{ color:var(--signal); }
+    table.cmp tbody tr:last-child td{ border-bottom:0; }
+    table.cmp td.dim{ color:var(--dim); font-family:var(--wire); font-size:.8rem; width:170px; }
+    table.cmp td.ans{ color:var(--paper); }
+    table.cmp td.pan{ color:var(--paper); background:rgba(242,169,59,.05);
+      border-left:1px solid rgba(242,169,59,.25); border-right:1px solid rgba(242,169,59,.25); }
+    table.cmp tbody tr:first-child td.pan{ border-top:1px solid rgba(242,169,59,.35); }
+    table.cmp tbody tr:last-child td.pan{ border-bottom:1px solid rgba(242,169,59,.35); }
+    table.cmp b{ color:var(--paper); font-weight:600; }
+    .weigh{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:26px; }
+    @media (max-width:760px){ .weigh{ grid-template-columns:1fr; } }
+    .weigh .w{ border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:20px 18px;
+      border-top:3px solid var(--hue,var(--signal)); }
+    .weigh .w .n{ font-family:var(--wire); font-size:.72rem; letter-spacing:.06em; color:var(--hue,var(--signal)); }
+    .weigh .w h3{ font-size:1.15rem; margin:8px 0 6px; }
+    .weigh .w p{ color:var(--dim); font-size:.92rem; max-width:none; }
+    .weigh .w ul{ margin:10px 0 0; padding-left:18px; color:var(--dim); font-size:.88rem; }
+    .weigh .w li{ margin:6px 0; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <aside class="rail">
+      <a class="brand" href="/"><span class="dot"></span>PAN</a>
+      <nav>
+        <div class="grp">overview</div>
+        <a href="/">/ what PAN is</a>
+        <a href="/why-names.html">/ why names</a>
+        <div class="grp">claim</div>
+        <a href="/claim.html">/ claim a name</a>
+        <div class="grp">bind</div>
+        <a href="/pair.html">/ pair your agent</a>
+        <div class="grp">reach</div>
+        <a href="/reach.html">/ resolve &amp; reach</a>
+        <div class="grp">reference</div>
+        <a href="/spec">/ the spec</a>
+        <a href="/developers.html">/ for developers</a>
+        <a href="/trust.html">/ trust &amp; privacy</a>
+        <a class="on" href="/comparison.html">/ pan &amp; ans</a>
+      </nav>
+      <div class="foot">personal agent naming · v0.3-draft<br>the reference registrar</div>
+    </aside>
+
+    <main class="main">
+
+      <div class="wrap hero">
+        <span class="eyebrow"><span class="tag">reference</span> · pan &amp; ans</span>
+        <h1>Two ways to name<br>an agent, for <span class="am">two worlds</span></h1>
+        <p class="lede">PAN and ANS both give agents names, and the names even look alike.
+          They are built for opposite ends of the same problem. ANS is the heavyweight
+          identity layer for agents acting across organizations. PAN is the lightweight
+          naming layer for personal agents. Neither is a smaller version of the other.</p>
+      </div>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the short version</p>
+          <h2>Different weight class, on purpose</h2>
+          <p><a href="https://datatracker.ietf.org/doc/draft-narajala-courtney-ansv2/">ANS,
+            the Agent Name Service</a>, anchors every agent to a DNS domain, issues X.509
+            certificates through a certificate authority, and seals a public transparency log.
+            That is exactly what you want for autonomous agents settling financial or
+            supply-chain transactions across company boundaries, and exactly what a person
+            with an inbox and an agent cannot stand up. PAN starts from the credential that
+            person already has: their email. One anchor, one signature, minutes to a name.</p>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">side by side</p>
+          <h2>The comparison</h2>
+          <div class="cmp-wrap">
+            <table class="cmp">
+              <thead>
+                <tr><th>Dimension</th><th>ANS</th><th class="pan">PAN</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="dim">Built for</td>
+                  <td class="ans">Autonomous agents transacting across organizations: finance, supply chain, sensitive business</td>
+                  <td class="pan">Personal agents, owned by someone with an email and nothing else</td>
+                </tr>
+                <tr>
+                  <td class="dim">Weight class</td>
+                  <td class="ans">Heavyweight. Intra- and inter-enterprise identity infrastructure</td>
+                  <td class="pan">Lightweight. A name and an address, minutes to set up</td>
+                </tr>
+                <tr>
+                  <td class="dim">Root of trust</td>
+                  <td class="ans">DNS domain ownership, verified by ACME</td>
+                  <td class="pan">Control of an email inbox</td>
+                </tr>
+                <tr>
+                  <td class="dim">Identity</td>
+                  <td class="ans">Dual X.509 certificates (public + private CA), mTLS, ES256</td>
+                  <td class="pan">An Ed25519 key; a pairing signature binds name to agent</td>
+                </tr>
+                <tr>
+                  <td class="dim">Name form</td>
+                  <td class="ans"><span class="mono">ans://v1.0.0.agent.example.com</span> · structured, versioned</td>
+                  <td class="pan"><span class="mono">Coder.jeff@gmail.com</span> · opaque, never parsed</td>
+                </tr>
+                <tr>
+                  <td class="dim">To register</td>
+                  <td class="ans">A domain, an ACME flow, a CA, a CSR, a version, an endpoint</td>
+                  <td class="pan">An email and a 6-digit code</td>
+                </tr>
+                <tr>
+                  <td class="dim">Transparency</td>
+                  <td class="ans">Public SCITT log: inclusion and consistency proofs, COSE receipts</td>
+                  <td class="pan">Private, owner-scoped hash chain (a public log would leak rosters)</td>
+                </tr>
+                <tr>
+                  <td class="dim">Discovery</td>
+                  <td class="ans">Yes: discovery services build searchable indexes</td>
+                  <td class="pan">None. Resolves a name you already have</td>
+                </tr>
+                <tr>
+                  <td class="dim">Messaging</td>
+                  <td class="ans">Rides A2A / MCP / HTTP over mTLS with identity certs</td>
+                  <td class="pan">None. Hands the address to A2A / AgentMesh</td>
+                </tr>
+                <tr>
+                  <td class="dim">Federation</td>
+                  <td class="ans">Core: a market of registration authorities, logs, discovery</td>
+                  <td class="pan">Named as future work</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">which one</p>
+          <h2>Pick by what you have</h2>
+          <div class="weigh">
+            <div class="w" style="--hue:var(--address)">
+              <div class="n">reach for ANS</div>
+              <h3>You are an organization</h3>
+              <ul>
+                <li>You own a domain and can run or buy a CA.</li>
+                <li>Your agents transact across company boundaries.</li>
+                <li>You need public, provable, tamper-evident audit trails.</li>
+                <li>Identity has to satisfy security and compliance review.</li>
+              </ul>
+            </div>
+            <div class="w" style="--hue:var(--signal)">
+              <div class="n">reach for PAN</div>
+              <h3>You are a person</h3>
+              <ul>
+                <li>You have an agent and an email, and no PKI team.</li>
+                <li>You want a name to hand out, today, in minutes.</li>
+                <li>You want the name to resolve to a reachable address.</li>
+                <li>You do not need enterprise-grade, re-verifiable identity.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="callout mint">
+            <div class="t">they can coexist</div>
+            <p>The two are not mutually exclusive. An agent's key can carry a PAN handle for
+              the people who reach it by name, and an ANS identity for the organizations that
+              require CA-backed trust. Different layers, same agent.</p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="wrap">
+          <span>Personal Agent Naming · the reference registrar</span>
+          <a href="/spec">the spec</a>
+          <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          <a href="https://agentmesh.ai">AgentMesh ↗</a>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+</body>
+</html>
