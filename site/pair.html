@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pair your agent: Personal Agent Naming</title>
-  <meta name="description" content="Binding attaches a name to a real agent. Your agent signs a pairing code with its own key, and the name becomes a verified address.">
+  <meta name="description" content="Binding attaches a name to a real agent. Three recipes cover it: the adapter for CLI agents like Claude Code, submitter-match for agents that are already endpoints, and a signer for runtimes.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,6 +21,15 @@
     .seq .body .t .name{ color:var(--signal); } .seq .body .t .ok{ color:var(--verify); } .seq .body .t .addr{ color:var(--address); }
     .seq .body p{ margin:5px 0 0; font-size:.86rem; color:var(--dim); max-width:60ch; }
     .seq .row.done{ background:rgba(67,214,166,.05); }
+    .recipe{ border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:20px 22px;
+      margin:18px 0; max-width:720px; border-top:2px solid var(--hue,var(--signal)); }
+    .recipe .r-tag{ font-family:var(--wire); font-size:.72rem; letter-spacing:.06em; color:var(--hue,var(--signal)); }
+    .recipe h3{ font-size:1.15rem; margin:8px 0 6px; }
+    .recipe p{ color:var(--dim); font-size:.94rem; margin:6px 0 0; }
+    .recipe p b{ color:var(--paper); }
+    .recipe pre{ background:#0b1220; border:1px solid var(--line); border-radius:10px; padding:12px 15px;
+      overflow-x:auto; font-family:var(--wire); font-size:.8rem; line-height:1.7; color:var(--paper); margin:12px 0 0; }
+    .recipe pre .c{ color:var(--faint); }
   </style>
 </head>
 <body>
@@ -54,18 +63,72 @@
         <h1>Point the name<br>at your <span style="color:var(--verify)">real agent</span></h1>
         <p class="lede">Owning a name and operating an agent are different proofs, and PAN
           keeps them separate. Binding is the moment a name stops being a reservation and
-          becomes a verified address: your agent proves, with its own key, that the name
-          points at it.</p>
+          becomes a verified address: your agent proves it is yours, and the name points
+          at it. Three recipes cover every agent, starting with the one you probably
+          run.</p>
       </div>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">three recipes</p>
+          <h2>Whatever your agent is, one of these fits</h2>
+
+          <div class="recipe" style="--hue:var(--signal)">
+            <div class="r-tag">recipe a · a local CLI agent (Claude Code, OpenClaw, Hermes, …)</div>
+            <h3>Run the adapter, then pair</h3>
+            <p>Most personal agents are outbound-only: they have no key and no inbound
+              address, so there is nothing to bind a name to yet. The
+              <a href="https://agentmesh.ai/adapter.html">mesh-adapter</a>, AgentMesh's
+              thin reference node, fixes both in one command: it gives your agent a
+              stable key and an inbound address, then signs the pairing code for you.</p>
+            <pre><span class="c"># 1. make the agent reachable (any CLI works; message on stdin, reply from stdout)</span>
+npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.1.0.tgz start --cmd "claude -p"
+
+<span class="c"># 2. request a pairing code here under My handles, then</span>
+mesh-adapter pair Coder.jeff@gmail.com KX4-92F</pre>
+            <p style="margin-top:12px">Full node products do the same job with more
+              around it, many agents, persistence, a settings surface; the Egg Gateway is
+              one example. Either way, the pairing is identical.</p>
+          </div>
+
+          <div class="recipe" style="--hue:var(--address)">
+            <div class="r-tag">recipe b · an agent that is already an endpoint</div>
+            <h3>Submit it under your email</h3>
+            <p>An A2A card, an HTTP API, an MCP server: some agents are already
+              reachable and have no signing key of their own. Submit the agent under the
+              same email that owns the name and it binds directly, submitter-match. The
+              card then carries that endpoint, whatever its protocol; PAN is neutral
+              about the transport.</p>
+          </div>
+
+          <div class="recipe" style="--hue:var(--verify)">
+            <div class="r-tag">recipe c · a runtime you are building</div>
+            <h3>Sign the code yourself</h3>
+            <p>If your agent holds its own key, pairing is one signature over
+              <span class="mono">pan-pair-v1:&lt;code&gt;:&lt;agent-id&gt;</span>, about
+              25 lines in any language. The <a href="/developers.html">developer page</a>
+              has the signer; the sequence below is everything that happens.</p>
+          </div>
+
+          <div class="callout mint">
+            <div class="t">what PAN does not do</div>
+            <p>PAN names your agent; it does not make your laptop reachable. The address
+              comes from somewhere else, a node like the adapter or the Gateway, or an
+              endpoint you already operate, and the name points at it. Naming and
+              reachability are different jobs, and the recipes above are really answers
+              to the second one.</p>
+          </div>
+        </div>
+      </section>
 
       <section class="band">
         <div class="wrap">
           <p class="kicker">the pairing moment</p>
           <h2>One signature turns a name into an address</h2>
-          <p>For an agent that holds a key, and most personal-agent runtimes do, binding
-            works like pairing a device. The registrar gives you a short code, your agent
-            signs it, and the binding is the intersection of two proofs: the code proves you
-            own the name, the signature proves you run the agent.</p>
+          <p>Under recipes A and C the mechanics are the same: the registrar gives you a
+            short code, your agent signs it, and the binding is the intersection of two
+            proofs. The code proves you own the name; the signature proves you run the
+            agent.</p>
 
           <div class="seq">
             <div class="row">
@@ -79,40 +142,26 @@
               <div class="who">agent</div>
               <div class="body">
                 <div class="t">sign <span class="mono">pan-pair-v1:KX4-92F:&lt;agent-id&gt;</span></div>
-                <p>Whatever runs your agent, a gateway, a daemon, a five-line script, signs the code with the agent's key.</p>
+                <p>Whatever runs your agent, the adapter, a gateway, a five-line script, signs the code with the agent's key.</p>
               </div>
             </div>
             <div class="row done">
               <div class="who">registrar</div>
               <div class="body">
                 <div class="t"><span class="ok">✓ bound</span> · <span class="name">Coder.jeff@gmail.com</span> → <span class="addr">agent UD653KLV…</span></div>
-                <p>Signature verified against the agent's key. The name now resolves to that agent, logged with its method.</p>
+                <p>Signature verified against the agent's key. The name now resolves to a card carrying that agent's address.</p>
               </div>
             </div>
+          </div>
+          <div class="callout mint">
+            <div class="t">host neutrality is in the spec</div>
+            <p>The registrar may not require any particular agent host, framework, or
+              network to pair. If an agent declares a key, whoever holds that key can
+              bind, from any runtime. That is normative, not a promise.</p>
           </div>
           <div class="cta">
             <a class="btn btn-signal" href="/reach.html">act 03 · now anyone can reach it →</a>
             <a class="btn btn-ghost" href="/developers.html">the signer, in ~25 lines →</a>
-          </div>
-        </div>
-      </section>
-
-      <section class="band">
-        <div class="wrap">
-          <p class="kicker">two ways to bind</p>
-          <h2>Proof, matched to what you have</h2>
-          <ul class="plain">
-            <li><b>Agent-key pairing.</b> The signature flow above. For any agent that holds
-              a key, which is nearly all of them. This is the primary path.</li>
-            <li><b>Submitter-match.</b> For an agent with no key of its own (say, an A2A card
-              reachable only by URL), submit it under the same email that owns the name and
-              it binds directly.</li>
-          </ul>
-          <div class="callout mint">
-            <div class="t">host neutrality is in the spec</div>
-            <p>The registrar may not require any particular agent host, framework, or
-              network to pair. If a listing declares a key, whoever holds that key can bind,
-              from any runtime. That is normative, not a promise.</p>
           </div>
         </div>
       </section>
