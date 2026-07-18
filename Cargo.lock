@@ -39,6 +39,7 @@ dependencies = [
  "chrono",
  "futures",
  "nkeys",
+ "rand 0.8.7",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

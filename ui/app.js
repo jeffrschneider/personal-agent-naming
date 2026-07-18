@@ -64,6 +64,7 @@ async function lookup(handle) {
   if (c.reserved) {
     msg.textContent = "";
     card.innerHTML = `<div class="d-head"><h2>${esc(c.handle)}</h2></div>
+      ${c.operator && c.operator.name ? `<div class="d-sub">operated by <b>${esc(c.operator.name)}</b> <span class="muted">(their chosen label)</span></div>` : ""}
       <div class="d-sub muted">Claimed, but no agent bound yet. It resolves to a reservation.</div>`;
     card.hidden = false;
     return;
@@ -80,6 +81,7 @@ async function lookup(handle) {
       <span class="handle-chip js-copy-handle" data-handle="${esc(c.handle)}" title="Copy handle">${esc(c.handle)}</span>
       ${presence}
     </div>
+    ${c.operator && c.operator.name ? `<div class="d-sub">operated by <b>${esc(c.operator.name)}</b> <span class="muted">(their chosen label, anchored to their verified email)</span></div>` : ""}
     <div class="d-section"><h3>Binding</h3>
       <div>${c.binding ? `<span class="seal good">${esc(c.binding)}</span>` : `<span class="muted">unbound</span>`}
         <span class="muted" style="margin-left:.5rem">claimed ${ago(c.claimed_at) || ""}</span></div>
@@ -157,7 +159,14 @@ $("claim-verify").addEventListener("click", async () => {
   session = { token: d.token, email };
   showStep("step-shelf");
   loadShelf();
+  loadOperator();
 });
+
+async function loadOperator() {
+  const r = await fetch("/api/operator", { headers: { Authorization: "Bearer " + session.token } });
+  const d = await r.json().catch(() => ({}));
+  if (d.ok && d.name) $("op-name").value = d.name;
+}
 
 async function loadShelf() {
   const r = await fetch("/api/handles/mine", { headers: { Authorization: "Bearer " + session.token } });
@@ -211,11 +220,13 @@ $("claim-name").addEventListener("input", updatePreview);
 
 $("claim-do").addEventListener("click", async () => {
   const name = $("claim-name").value.trim();
+  const operatorName = $("op-name").value.trim();
+  if (!operatorName) { claimMsg("claim-msg", "Your public name is required: it is shown on your handles' cards.", true); return; }
   claimMsg("claim-msg", "Claiming…");
   const r = await fetch("/api/handles/claim", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, operator_name: operatorName }),
   });
   const d = await r.json();
   if (r.status === 401) { session = null; showStep("step-email"); return; }

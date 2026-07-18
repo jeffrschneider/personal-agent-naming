@@ -507,6 +507,60 @@ pub async fn resolve(pool: &PgPool, handle: &str) -> Result<Option<Handle>, Regi
     .await?)
 }
 
+/// Reverse resolution (PAN v0.3): agent key -> its bound handle, if any.
+/// The key is public (it arrives on every signed envelope), so this maps a
+/// verified sender to a name without exposing anything a card does not.
+pub async fn resolve_by_agent(pool: &PgPool, agent_id: &str) -> Result<Option<Handle>, RegistrarError> {
+    Ok(sqlx::query_as::<_, Handle>(concat!(
+        "SELECT ",
+        handle_cols!(),
+        " FROM handles WHERE released_at IS NULL AND listing_id IN \
+          (SELECT id FROM listings WHERE source IN ('agent','agentmesh') AND source_id = $1) \
+          ORDER BY created_at DESC LIMIT 1"
+    ))
+    .bind(agent_id.trim())
+    .fetch_optional(pool)
+    .await?)
+}
+
+/// The operator's display name (PAN v0.3): one required public label per
+/// verified email, shown on every card of that owner's handles. It is the
+/// operator's CHOSEN label anchored to the proven email; it is not verified
+/// identity, and the spec says so.
+pub async fn operator_get(pool: &PgPool, email: &str) -> Result<Option<String>, RegistrarError> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT display_name FROM operators WHERE email = $1")
+            .bind(email)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|r| r.0))
+}
+
+/// Set or update the operator display name (logged, like every registrar action).
+pub async fn operator_set(
+    pool: &PgPool,
+    email: &str,
+    display_name: &str,
+) -> Result<String, RegistrarError> {
+    let name = display_name.trim();
+    if name.is_empty() || name.chars().count() > 80 {
+        return Err(RegistrarError::Invalid(
+            "operator display name must be 1-80 characters".into(),
+        ));
+    }
+    sqlx::query(
+        "INSERT INTO operators (email, display_name, updated_at) VALUES ($1, $2, now()) \
+         ON CONFLICT (email) DO UPDATE SET display_name = EXCLUDED.display_name, updated_at = now()",
+    )
+    .bind(email)
+    .bind(name)
+    .execute(pool)
+    .await?;
+    log_action(pool, "operator", "-", email, serde_json::json!({ "display_name": name })).await?;
+    log::info!("[catalog:registrar] operator name set for {email}");
+    Ok(name.to_string())
+}
+
 /// One owner's own handle history (PAN §6). Owner-scoped by verified
 /// anchor: the log is never world-readable, since email-tier handles embed
 /// the owner's address and a public log would enumerate their whole roster.

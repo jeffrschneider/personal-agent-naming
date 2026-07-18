@@ -28,6 +28,7 @@ pub fn router(pool: PgPool) -> Router {
         .route("/api/listings", post(submit))
         .route("/api/listings/:id", get(get_one))
         .route("/api/resolve", get(resolve_handle))
+        .route("/api/operator", get(operator_get).post(operator_set))
         .route("/.well-known/webfinger", get(webfinger))
         .route("/api/listings/mine", get(listings_mine))
         .route("/api/pair/start", post(pair_start))
@@ -261,6 +262,10 @@ struct ClaimBody {
     name: String,
     #[serde(default)]
     listing_id: Option<Uuid>,
+    /// PAN v0.3: every operator has a required public display name. Provide
+    /// it here on (at least) the first claim; later claims inherit it.
+    #[serde(default)]
+    operator_name: Option<String>,
 }
 
 async fn handles_claim(
@@ -269,6 +274,17 @@ async fn handles_claim(
     Json(body): Json<ClaimBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let email = session_from(&pool, &headers).await?;
+    if let Some(ref n) = body.operator_name {
+        registrar::operator_set(&pool, &email, n).await.map_err(reg_err)?;
+    } else if registrar::operator_get(&pool, &email).await.map_err(reg_err)?.is_none() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "ok": false,
+                "error": "operator_name required: PAN requires a public display name for the operator (your chosen label, shown on your handles' cards)"
+            })),
+        ));
+    }
     let handle =
         registrar::claim(&pool, &email, &body.name, body.listing_id).await.map_err(reg_err)?;
     Ok(Json(serde_json::json!({ "ok": true, "handle": handle })))
@@ -352,7 +368,11 @@ async fn pair_complete(
 
 /// The PAN card (§5.1): the endpoints are the address. Presence is optional
 /// and only present when the registrar actually observes it.
-fn build_card(h: &registrar::Handle, listing: Option<&crate::model::Listing>) -> serde_json::Value {
+fn build_card(
+    h: &registrar::Handle,
+    listing: Option<&crate::model::Listing>,
+    operator_name: Option<&str>,
+) -> serde_json::Value {
     let mut endpoints: Vec<serde_json::Value> = Vec::new();
     if let Some(l) = listing {
         // A key-bearing agent: the key is the address (its mesh inbox).
@@ -374,6 +394,10 @@ fn build_card(h: &registrar::Handle, listing: Option<&crate::model::Listing>) ->
     });
     serde_json::json!({
         "handle": h.handle,
+        // The operator's chosen public label, set under the verified email
+        // session (PAN v0.3). Anchored, logged, consistent across the owner's
+        // handles — but NOT verified identity.
+        "operator": operator_name.map(|n| serde_json::json!({ "name": n })),
         "binding": h.bind_method,
         "claimed_at": h.created_at,
         "reserved": listing.is_none(),
@@ -384,16 +408,29 @@ fn build_card(h: &registrar::Handle, listing: Option<&crate::model::Listing>) ->
 
 #[derive(Deserialize)]
 struct ResolveQuery {
-    handle: String,
+    handle: Option<String>,
+    /// Reverse resolution (PAN v0.3): look up by agent key instead. The key
+    /// is public (it rides on every signed envelope), so this exposes nothing
+    /// a forward resolve would not.
+    agent_id: Option<String>,
 }
 
-/// Public exact-string resolution: handle -> card (PAN §5). The bound
-/// listing rides along for this registrar's own UI.
+/// Public exact-string resolution: handle -> card (PAN §5), or agent_id ->
+/// card (reverse). The bound listing rides along for this registrar's own UI.
 async fn resolve_handle(
     State(pool): State<PgPool>,
     Query(q): Query<ResolveQuery>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let found = registrar::resolve(&pool, &q.handle).await.map_err(reg_err)?;
+    let found = match (&q.handle, &q.agent_id) {
+        (Some(h), _) => registrar::resolve(&pool, h).await.map_err(reg_err)?,
+        (None, Some(a)) => registrar::resolve_by_agent(&pool, a).await.map_err(reg_err)?,
+        (None, None) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "ok": false, "error": "pass handle= or agent_id=" })),
+            ))
+        }
+    };
     match found {
         None => Err((
             StatusCode::NOT_FOUND,
@@ -404,13 +441,40 @@ async fn resolve_handle(
                 Some(id) => store::get(&pool, id).await.map_err(|e| reg_err(e.into()))?,
                 None => None,
             };
+            let operator = registrar::operator_get(&pool, &h.email).await.map_err(reg_err)?;
             Ok(Json(serde_json::json!({
                 "ok": true,
-                "card": build_card(&h, listing.as_ref()),
+                "card": build_card(&h, listing.as_ref(), operator.as_deref()),
                 "listing": listing,
             })))
         }
     }
+}
+
+#[derive(Deserialize)]
+struct OperatorBody {
+    name: String,
+}
+
+/// Set/update the operator display name (session-scoped, logged).
+async fn operator_set(
+    State(pool): State<PgPool>,
+    headers: HeaderMap,
+    Json(body): Json<OperatorBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let email = session_from(&pool, &headers).await?;
+    let name = registrar::operator_set(&pool, &email, &body.name).await.map_err(reg_err)?;
+    Ok(Json(serde_json::json!({ "ok": true, "name": name })))
+}
+
+/// Read the caller's own operator record (for UI prefill).
+async fn operator_get(
+    State(pool): State<PgPool>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let email = session_from(&pool, &headers).await?;
+    let name = registrar::operator_get(&pool, &email).await.map_err(reg_err)?;
+    Ok(Json(serde_json::json!({ "ok": true, "name": name })))
 }
 
 #[derive(Deserialize)]

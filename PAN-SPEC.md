@@ -74,6 +74,17 @@ Control of the mailbox authorizes claims under it.
 
 Registrars MUST rate-limit code issuance per anchor.
 
+**The operator record.** Every anchor has one REQUIRED public display name,
+the operator's chosen label (e.g. "Jeff Schneider"). It MUST be set no later
+than the anchor's first claim, under the verified session; it MAY be updated
+at any time under a verified session, and every change MUST be recorded in
+the history log. Registrars MUST show the operator name on every card of
+that anchor's handles (§5.1). The rationale: PAN is *personal* agent naming,
+and the handle already publishes the anchor email, so the human behind an
+agent is the meaningful unit of trust; a white pages has names. Consumers
+MUST treat the name as a chosen label anchored to the proven email, not as
+verified identity (§8).
+
 **Lifetime = anchor lifetime.** A handle lives as long as its owner can
 re-prove the anchor when required. This is intended: a personal address that
 outlives employers keeps its handles; a work address that dies at
@@ -156,6 +167,7 @@ Resolution maps a handle to its **card**.
 ```json
 {
   "handle":   "Coder.jeff@gmail.com",
+  "operator": { "name": "Jeff Schneider" },   // REQUIRED: the anchor's chosen public label (§3)
   "binding":  "agent-key",                 // "agent-key" | "email-submitter" | null
   "claimed_at":  "2026-07-18T…",
   "presence": { "state": "online", "last_seen_at": "…" },   // OPTIONAL, only if a source provides it
@@ -246,6 +258,15 @@ Binding sharpens what a handle claims. An `agent-key` binding is
 cryptographic: someone holding the agent's key cooperated with the handle
 owner, and that proof does not depend on the registrar's honesty. An
 `email-submitter` binding is notarized only.
+
+**The operator name is a label, not an identity.** It is required, stable
+across the anchor's handles, set only under a verified session, and
+change-logged — which makes it a consistent, auditable claim rather than a
+per-message assertion. It is still whatever the mailbox owner chose to
+type. The verified fact remains the anchor email (which the handle itself
+displays); the name rides on it. Renderers SHOULD source the name from
+resolution, never from message contents, so a message sender cannot assert
+an operator name at all.
 
 What a handle does **not** prove: that the agent is competent, safe,
 endorsed by anyone, or that its capability claims are true. A handle is an
