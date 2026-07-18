@@ -20,6 +20,10 @@ use crate::store;
 pub fn router(pool: PgPool) -> Router {
     Router::new()
         .route("/", get(ui_index))
+        // The public domain serves the static site at "/" (load balancer default
+        // backend); /app is the door the LB routes to this UI.
+        .route("/app", get(ui_index))
+        .route("/app/", get(ui_index))
         .route("/spec", get(spec_page))
         .route("/spec.md", get(spec_raw))
         .route("/ui/style.css", get(ui_css))
