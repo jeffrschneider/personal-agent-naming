@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claim a name: Personal Agent Naming</title>
+  <meta name="description" content="Claim an agent name in thirty seconds: prove control of an email, pick a name, it is yours across the whole registry.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .claimbox{ background:var(--panel); border:1px solid var(--line); border-radius:12px;
+      padding:8px 0; margin:26px 0 6px; max-width:620px; }
+    .cstep{ padding:16px 20px; border-bottom:1px solid var(--line); }
+    .cstep:last-child{ border-bottom:0; }
+    .clabel{ font-family:var(--wire); font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); }
+    .clabel .n{ color:var(--signal); }
+    .cfield{ display:flex; gap:10px; margin:9px 0 7px; }
+    .cinput{ flex:1; background:#0b1220; border:1px solid var(--line); border-radius:8px; padding:9px 12px;
+      color:var(--paper); font-family:var(--wire); font-size:.86rem; min-width:0; }
+    .cbtn{ font-family:var(--wire); font-size:.8rem; font-weight:600; background:var(--signal); color:#20140a;
+      border:none; border-radius:8px; padding:9px 15px; flex-shrink:0; }
+    .chint{ font-size:.82rem; color:var(--dim); margin:0; }
+    .cpreview{ font-family:var(--wire); font-size:.9rem; color:var(--signal); margin:2px 0 6px; }
+    .cpreview .ok{ color:var(--verify); font-family:var(--body); font-size:.8rem; margin-left:6px; }
+    .fine{ font-family:var(--wire); font-size:.76rem; color:var(--faint); margin-top:12px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <aside class="rail">
+      <a class="brand" href="/"><span class="dot"></span>PAN</a>
+      <nav>
+        <div class="grp">overview</div>
+        <a href="/">/ what PAN is</a>
+        <a href="/why-names.html">/ why names</a>
+        <div class="grp">claim</div>
+        <a class="on" href="/claim.html">/ claim a name</a>
+        <a href="/domains.html">/ domains</a>
+        <div class="grp">bind</div>
+        <a href="/pair.html">/ pair your agent</a>
+        <div class="grp">reach</div>
+        <a href="/reach.html">/ resolve &amp; reach</a>
+        <div class="grp">reference</div>
+        <a href="/spec">/ the spec</a>
+        <a href="/developers.html">/ for developers</a>
+        <a href="/trust.html">/ trust &amp; privacy</a>
+      </nav>
+      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+    </aside>
+
+    <main class="main">
+
+      <div class="wrap hero">
+        <span class="eyebrow"><span class="tag">act 01</span> · claim</span>
+        <h1>Get the name.<br><span class="am">Thirty seconds</span>, no account</h1>
+        <p class="lede">A handle is anchored to an email you already own. Prove you control
+          the inbox, pick a name, and the string is yours across the whole registry. That
+          one verification is all the registrar ever asks of you.</p>
+      </div>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">thirty seconds, timed</p>
+          <h2>Claiming looks like this</h2>
+          <div class="claimbox" aria-label="The claim flow, illustrated">
+            <div class="cstep">
+              <div class="clabel"><span class="n">01</span> the email you already own</div>
+              <div class="cfield"><input class="cinput" value="you@gmail.com" readonly><button class="cbtn" tabindex="-1">send code</button></div>
+              <p class="chint">This is the anchor. Whoever controls this inbox controls the handles under it.</p>
+            </div>
+            <div class="cstep">
+              <div class="clabel"><span class="n">02</span> six digits, from your inbox</div>
+              <div class="cfield"><input class="cinput" value="4 8 2 9 1 7" readonly><button class="cbtn" tabindex="-1">verify</button></div>
+              <p class="chint">Expires in 15 minutes. One code, and you have a short session to claim.</p>
+            </div>
+            <div class="cstep">
+              <div class="clabel"><span class="n">03</span> name your agent</div>
+              <div class="cfield"><input class="cinput" value="Coder" readonly><button class="cbtn" tabindex="-1">claim</button></div>
+              <div class="cpreview">Coder.you@gmail.com <span class="ok">✓ available</span></div>
+              <p class="chint">Any name up to 64 characters. Dots allowed. First come, first served.</p>
+            </div>
+          </div>
+          <p class="fine">Illustration. The live flow runs on <a href="/">the registrar</a>.</p>
+          <div class="cta">
+            <a class="btn btn-signal" href="/">claim a name for real</a>
+            <a class="btn btn-ghost" href="/domains.html">have a domain? →</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the two rules</p>
+          <h2>What makes a handle a handle</h2>
+          <ul class="plain">
+            <li><b>Nobody parses handles.</b> A handle is one opaque string. Looking one up
+              means matching the whole thing, never taking it apart. That is why any name
+              works, dots and all.</li>
+            <li><b>One string, one owner.</b> Uniqueness is full-string, first come first
+              served, across the whole registry. The second claimant hears "taken."</li>
+          </ul>
+          <div class="callout">
+            <div class="t">lifetime, and letting go</div>
+            <p>A handle lives as long as you can re-prove the email. A personal address that
+              outlives employers keeps its handles; a work address that dies at offboarding
+              takes its handles with it. Release a handle and it sits out a 90-day
+              cooling-off, so a name you wrote down last year never quietly becomes someone
+              else's.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">next</p>
+          <h2>A name still points at nothing</h2>
+          <p>Claiming gets you the string. On its own it resolves to a reservation, not an
+            agent. The next move is binding: pointing the name at a real agent so it becomes
+            an address.</p>
+          <div class="cta">
+            <a class="btn btn-signal" href="/pair.html">act 02 · pair your agent →</a>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="wrap">
+          <span>Personal Agent Naming · the reference registrar</span>
+          <a href="/spec">the spec</a>
+          <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          <a href="https://agentmesh.ai">AgentMesh ↗</a>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+</body>
+</html>

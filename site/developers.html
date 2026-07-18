@@ -1,110 +1,119 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>For developers · Agent Catalog</title>
-<meta name="description" content="Implement PAN in your agent host: one canonical string, one signature, about 25 lines. Plus the self-host story.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📇</text></svg>">
-<link rel="stylesheet" href="/site.css">
-<style>
-  .selfhost { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: center;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.8rem; }
-  @media (max-width: 720px) { .selfhost { grid-template-columns: 1fr; } }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>For developers: Personal Agent Naming</title>
+  <meta name="description" content="Implement PAN pairing in your agent host with one canonical string and one signature. Resolve handles with one GET. Run your own registrar.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .selfhost{ display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:center; margin-top:24px;
+      background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:22px; }
+    @media (max-width:760px){ .selfhost{ grid-template-columns:1fr; } }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <nav>
-    <a class="brand" href="/">Agent<span>Catalog</span></a>
-    <span class="links">
-      <a href="/why.html">Why now</a>
-      <a href="/standard.html">The standard</a>
-      <a class="here" href="/developers.html">For developers</a>
-      <a href="/spec">The spec</a>
-      <a href="https://agent-catalog-68925516043.us-central1.run.app/">Look up a handle</a>
-    </span>
-  </nav>
+  <div class="layout">
 
-  <section style="padding-top:3rem">
-    <div class="eyebrow">OpenClaw · Hermes · coding agents · gateways</div>
-    <h1 class="page">Give every agent you host a name. It's one signature.</h1>
-    <p class="sec-lede">
-      If you build a personal-agent runtime, your users' agents are the
-      anonymous majority this standard exists for. Implementing PAN pairing
-      in your host is deliberately tiny.
-    </p>
-    <ol class="steps">
-      <li><b>Your agent already has (or can generate) an Ed25519 keypair.</b>
-        Its public key is its listing identity.</li>
-      <li><b>When a user pastes a pairing code, sign one canonical string:</b>
-        the UTF-8 bytes of <span class="mono">pan-pair-v1:&lt;code&gt;:&lt;agent-id&gt;</span>.</li>
-      <li><b>POST <span class="mono">{code, agent_id, signature}</span> to the
-        registrar.</b> No API key, no OAuth, no account. The code plus the
-        signature is the whole handshake.</li>
-    </ol>
-    <p class="sec-lede" style="margin-top:1.4rem">
-      That's the entire integration. The reference signer,
-      <span class="mono">pan_pair.rs</span>, is a standalone example of about
-      25 lines, and it depends on no particular agent framework, because the
-      spec forbids the registrar from requiring one. Your users get names
-      that resolve publicly, carry your manifest format verbatim, and work
-      with existing WebFinger tooling. You get out of the naming business
-      entirely.
-    </p>
-    <div class="cta-row">
-      <a class="btn" href="/spec">Read §4.2 of the spec</a>
-      <a class="btn ghost" href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub</a>
-    </div>
-  </section>
+    <aside class="rail">
+      <a class="brand" href="/"><span class="dot"></span>PAN</a>
+      <nav>
+        <div class="grp">overview</div>
+        <a href="/">/ what PAN is</a>
+        <a href="/why-names.html">/ why names</a>
+        <div class="grp">claim</div>
+        <a href="/claim.html">/ claim a name</a>
+        <a href="/domains.html">/ domains</a>
+        <div class="grp">bind</div>
+        <a href="/pair.html">/ pair your agent</a>
+        <div class="grp">reach</div>
+        <a href="/reach.html">/ resolve &amp; reach</a>
+        <div class="grp">reference</div>
+        <a href="/spec">/ the spec</a>
+        <a class="on" href="/developers.html">/ for developers</a>
+        <a href="/trust.html">/ trust &amp; privacy</a>
+      </nav>
+      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+    </aside>
 
-  <section>
-    <div class="sec-eyebrow">Resolution, for consumers</div>
-    <h2>Resolving a handle is one GET.</h2>
-    <p class="sec-lede">
-      Exact-string lookup, no parsing, no auth. The card carries the anchor
-      tier, the binding method and its proof class, presence where the
-      registrar observes it, typed endpoints, and the agent's manifest
-      verbatim. A PAN handle is also a valid <span class="mono">acct:</span>
-      URI, so WebFinger works out of the box.
-    </p>
-    <pre><span class="c"># the card</span>
+    <main class="main">
+
+      <div class="wrap hero">
+        <span class="eyebrow"><span class="tag">reference</span> · for developers</span>
+        <h1>Implement it in<br><span class="am">one signature</span></h1>
+        <p class="lede">If you build a personal-agent runtime, your users' agents are the
+          anonymous majority this exists for. Adding PAN to your host is deliberately tiny.</p>
+      </div>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">host integration</p>
+          <h2>Pairing, from any runtime</h2>
+          <ul class="plain">
+            <li><b>Your agent already holds an Ed25519 key.</b> Its public key is its listing identity.</li>
+            <li><b>Sign one canonical string</b> when the user pastes a pairing code:
+              <span class="mono verify">pan-pair-v1:&lt;code&gt;:&lt;agent-id&gt;</span>.</li>
+            <li><b>POST it.</b> <span class="mono">{code, agent_id, signature}</span>. No API
+              key, no OAuth, no account. The code plus the signature is the whole handshake.</li>
+          </ul>
+          <p>The reference signer, <span class="mono">pan_pair.rs</span>, is about 25 lines
+            and depends on no particular framework, because the spec forbids the registrar
+            from requiring one.</p>
+          <div class="cta">
+            <a class="btn btn-signal" href="/spec">read §4.2 of the spec</a>
+            <a class="btn btn-ghost" href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">resolution, for consumers</p>
+          <h2>Resolving a handle is one GET</h2>
+          <p>Exact-string lookup, no parsing, no auth. The card carries the anchor tier, the
+            binding method, presence where observed, typed endpoints, and the agent's
+            manifest verbatim. A PAN handle is also a valid <span class="mono">acct:</span>
+            URI, so WebFinger works out of the box.</p>
+          <pre class="code"><span class="c"># the card</span>
 curl "https://agentcatalog.com/api/resolve?<span class="b">handle=Coder.you@gmail.com</span>"
 
 <span class="c"># the same handle via WebFinger (RFC 7033)</span>
-curl "https://agentcatalog.com/.well-known/webfinger?resource=<span class="b">acct:Coder.you@gmail.com</span>"</pre>
-  </section>
+curl "https://agentcatalog.com/.well-known/webfinger?resource=<span class="a">acct:Coder.you@gmail.com</span>"</pre>
+        </div>
+      </section>
 
-  <section>
-    <div class="sec-eyebrow">Same code, your shelf</div>
-    <div class="selfhost">
-      <div>
-        <h2>The registrar is one binary. So is this argument.</h2>
-        <p class="sec-lede" style="margin-bottom:.6rem">
-          A naming standard controlled by one mandatory registrar wouldn't be
-          a standard. Any conforming registrar can serve PAN, you can run your
-          own, and federation is named in the spec as explicit future work.
-          We intend to earn the default, not own it.
-        </p>
-      </div>
-      <pre>$ git clone github.com/jeffrschneider/Agent-Catalog-ARD
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">same code, your registry</p>
+          <div class="selfhost">
+            <div>
+              <h2 style="font-size:1.5rem;">Run your own registrar</h2>
+              <p>A naming standard controlled by one mandatory registrar would not be a
+                standard. Any conforming registrar can serve PAN, you can run your own, and
+                federation is named in the spec as explicit future work. We intend to earn
+                the default, not own it.</p>
+            </div>
+            <pre class="code">$ git clone github.com/jeffrschneider/Agent-Catalog-ARD
 $ cargo run
-<span class="c">→ http://localhost:8080  shelf, API, /spec, zero setup</span></pre>
-    </div>
-  </section>
+<span class="c">→ http://localhost:8080  registrar + API + /spec</span></pre>
+          </div>
+        </div>
+      </section>
 
-  <div class="eco">
-    <b>ARD</b> finds · <b>A2A</b> talks · <b>AgentMesh</b> connects ·
-    <span class="us">PAN names</span>
+      <footer>
+        <div class="wrap">
+          <span>Personal Agent Naming · the reference registrar</span>
+          <a href="/spec">the spec</a>
+          <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          <a href="https://agentmesh.ai">AgentMesh ↗</a>
+        </div>
+      </footer>
+
+    </main>
   </div>
-
-  <footer>
-    <span>Agent Catalog</span>
-    <a href="/spec">The spec</a>
-    <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub</a>
-    <a href="https://agentmesh.ai">AgentMesh</a>
-    <span style="margin-left:auto">Reference registrar for PAN v0.2-draft</span>
-  </footer>
-</div>
 </body>
 </html>

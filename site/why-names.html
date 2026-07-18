@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Why names: Personal Agent Naming</title>
+  <meta name="description" content="Personal agents are the most numerous agents on earth and almost none have names. Plus presence: a name is only half of trust.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .shelf{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:22px 0 6px; }
+    .mc{ position:relative; overflow:hidden; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+      padding:12px 14px 12px 16px; }
+    .mc::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--faint); }
+    .mc.on::before{ background:var(--verify); box-shadow:0 0 9px rgba(67,214,166,.6); }
+    .mc.off{ opacity:.55; }
+    .mc .n{ font-family:var(--wire); font-size:.76rem; color:var(--paper); }
+    .mc .n .nm{ color:var(--signal); }
+    .mc .p{ font-family:var(--wire); font-size:.68rem; margin-top:6px; }
+    .mc.on .p{ color:var(--verify); } .mc.off .p{ color:var(--faint); }
+    @media (max-width:700px){ .shelf{ grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <aside class="rail">
+      <a class="brand" href="/"><span class="dot"></span>PAN</a>
+      <nav>
+        <div class="grp">overview</div>
+        <a href="/">/ what PAN is</a>
+        <a class="on" href="/why-names.html">/ why names</a>
+        <div class="grp">claim</div>
+        <a href="/claim.html">/ claim a name</a>
+        <a href="/domains.html">/ domains</a>
+        <div class="grp">bind</div>
+        <a href="/pair.html">/ pair your agent</a>
+        <div class="grp">reach</div>
+        <a href="/reach.html">/ resolve &amp; reach</a>
+        <div class="grp">reference</div>
+        <a href="/spec">/ the spec</a>
+        <a href="/developers.html">/ for developers</a>
+        <a href="/trust.html">/ trust &amp; privacy</a>
+      </nav>
+      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+    </aside>
+
+    <main class="main">
+
+      <div class="wrap hero">
+        <span class="eyebrow"><span class="tag">why</span> · names</span>
+        <h1>The most numerous agents<br>on earth are <span class="am">anonymous</span></h1>
+        <p class="lede">Count the agents that actually exist. Not the demo bots, not the
+          enterprise pilots: the personal agents. They outnumber every other kind by orders
+          of magnitude, and almost none of them have a name you can hand to another person.</p>
+      </div>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the audience nobody serves</p>
+          <h2>Built for the other agents</h2>
+          <p>Claude Code and Codex sessions in terminals. OpenClaw and Hermes assistants on
+            gateways. The agent that reads your mail, the one that watches your builds. Every
+            existing directory was built for the hosted, corporate, capability-marketed kind
+            of agent. Personal agents were left out, because their owners have an email
+            address and nothing else: no domain, no PKI, no ops team. PAN starts from exactly
+            that.</p>
+          <p class="pull">Your agent gets a name you can put in an email signature, say in a
+            meeting, or paste into another agent's config.</p>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the other half of trust</p>
+          <h2>A name that answers</h2>
+          <p>A name is half of it. The other half is whether anything answers when you use
+            it. Where the registrar observes liveness, presence rides on the resolved card:
+            online, last seen an hour ago, dark for a month. A stale card looks stale.</p>
+          <div class="shelf">
+            <div class="mc on"><div class="n"><span class="nm">Translator</span>.maria@gmail.com</div><div class="p">● online</div></div>
+            <div class="mc on"><div class="n"><span class="nm">QuoteBidder</span>.sales@acme.com</div><div class="p">● online</div></div>
+            <div class="mc off"><div class="n"><span class="nm">CI.Doctor</span>.dev@fastmail.com</div><div class="p">seen 47m ago</div></div>
+            <div class="mc on"><div class="n"><span class="nm">PaperScout</span>.lin@outlook.com</div><div class="p">● online</div></div>
+            <div class="mc off"><div class="n"><span class="nm">NightAuditor</span>.it@plexo.io</div><div class="p">seen 26h ago</div></div>
+            <div class="mc off"><div class="n"><span class="nm">Echo</span>.test@example.com</div><div class="p">no signal</div></div>
+          </div>
+          <p style="font-family:var(--wire); font-size:.76rem; color:var(--faint); margin-top:10px;">presence is a supporting signal on the card, not the headline. the name and its address come first.</p>
+        </div>
+      </section>
+
+      <footer>
+        <div class="wrap">
+          <span>Personal Agent Naming · the reference registrar</span>
+          <a href="/spec">the spec</a>
+          <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          <a href="https://agentmesh.ai">AgentMesh ↗</a>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trust and privacy: Personal Agent Naming</title>
+  <meta name="description" content="The registrar is a notary, not an oracle. What a handle proves, what it does not, and why the log is private.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .notlist{ list-style:none; padding:0; margin:16px 0 0; display:grid; gap:8px; color:var(--paper); max-width:66ch; }
+    .notlist li{ font-family:var(--body); }
+    .notlist li::before{ content:"✕  "; color:#f2726b; font-family:var(--wire); }
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <aside class="rail">
+      <a class="brand" href="/"><span class="dot"></span>PAN</a>
+      <nav>
+        <div class="grp">overview</div>
+        <a href="/">/ what PAN is</a>
+        <a href="/why-names.html">/ why names</a>
+        <div class="grp">claim</div>
+        <a href="/claim.html">/ claim a name</a>
+        <a href="/domains.html">/ domains</a>
+        <div class="grp">bind</div>
+        <a href="/pair.html">/ pair your agent</a>
+        <div class="grp">reach</div>
+        <a href="/reach.html">/ resolve &amp; reach</a>
+        <div class="grp">reference</div>
+        <a href="/spec">/ the spec</a>
+        <a href="/developers.html">/ for developers</a>
+        <a class="on" href="/trust.html">/ trust &amp; privacy</a>
+      </nav>
+      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+    </aside>
+
+    <main class="main">
+
+      <div class="wrap hero">
+        <span class="eyebrow"><span class="tag">reference</span> · trust &amp; privacy</span>
+        <h1>A notary,<br><span class="am">not an oracle</span></h1>
+        <p class="lede">Read this before trusting a handle. It says exactly what a handle
+          proves, what it does not, and why the registrar keeps its records private.</p>
+      </div>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">what happened, exactly</p>
+          <h2>Trusting an email-tier handle</h2>
+          <p>For an email-tier handle, here is precisely what the registrar witnessed:
+            someone proved control of an inbox, once. No third party can re-run that check,
+            so trusting the handle means trusting the registrar's word. The
+            <a href="/domains.html">domain tier</a> removes the notary entirely: the proof
+            lives at the domain, and anyone can re-fetch it.</p>
+          <p class="pull">A handle is an address, not a badge.</p>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the honest limit</p>
+          <h2>What a handle does not prove</h2>
+          <p>At any tier, a handle says who claimed a name and, when bound, that they control
+            the agent behind it. It does not say anything about the agent's behavior.</p>
+          <ul class="notlist">
+            <li>that the agent is competent</li>
+            <li>that the agent is safe</li>
+            <li>that anyone endorses it</li>
+            <li>that its capability claims are true</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">privacy</p>
+          <h2>The log is private</h2>
+          <p>Every claim, binding, and release is recorded under a hash chain, so tampering
+            is detectable, and you can audit the full history of your own handles. But the
+            log is not public. Email-tier handles embed the owner's address in the name, so a
+            world-readable log would let anyone enumerate an owner's whole roster by filtering
+            on their email. Entering a random email gets you nothing: the only way to see an
+            owner's handles is to prove you control that email.</p>
+          <div class="callout">
+            <div class="t">the trade, stated plainly</div>
+            <p>A private log means there is no public cross-check on the registrar in this
+              version. That is a deliberate trade of external auditability for owner privacy.
+              Public, privacy-preserving verifiability is named in the spec as future work.</p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="wrap">
+          <span>Personal Agent Naming · the reference registrar</span>
+          <a href="/spec">the spec</a>
+          <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          <a href="https://agentmesh.ai">AgentMesh ↗</a>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+</body>
+</html>

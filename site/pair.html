@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pair your agent: Personal Agent Naming</title>
+  <meta name="description" content="Binding attaches a name to a real agent. Your agent signs a pairing code with its own key, and the name becomes a verified address.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .seq{ margin:26px 0 6px; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); }
+    .seq .row{ display:grid; grid-template-columns:84px 1fr; gap:0; border-bottom:1px solid var(--line); }
+    .seq .row:last-child{ border-bottom:0; }
+    .seq .who{ font-family:var(--wire); font-size:.64rem; letter-spacing:.06em; text-transform:uppercase;
+      color:var(--faint); padding:17px 0 0 16px; }
+    .seq .body{ padding:15px 18px 15px 8px; }
+    .seq .body .t{ font-family:var(--wire); font-size:.86rem; color:var(--paper); }
+    .seq .body .t .name{ color:var(--signal); } .seq .body .t .ok{ color:var(--verify); } .seq .body .t .addr{ color:var(--address); }
+    .seq .body p{ margin:5px 0 0; font-size:.86rem; color:var(--dim); max-width:60ch; }
+    .seq .row.done{ background:rgba(67,214,166,.05); }
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <aside class="rail">
+      <a class="brand" href="/"><span class="dot"></span>PAN</a>
+      <nav>
+        <div class="grp">overview</div>
+        <a href="/">/ what PAN is</a>
+        <a href="/why-names.html">/ why names</a>
+        <div class="grp">claim</div>
+        <a href="/claim.html">/ claim a name</a>
+        <a href="/domains.html">/ domains</a>
+        <div class="grp">bind</div>
+        <a class="on" href="/pair.html">/ pair your agent</a>
+        <div class="grp">reach</div>
+        <a href="/reach.html">/ resolve &amp; reach</a>
+        <div class="grp">reference</div>
+        <a href="/spec">/ the spec</a>
+        <a href="/developers.html">/ for developers</a>
+        <a href="/trust.html">/ trust &amp; privacy</a>
+      </nav>
+      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+    </aside>
+
+    <main class="main">
+
+      <div class="wrap hero">
+        <span class="eyebrow"><span class="tag">act 02</span> · bind</span>
+        <h1>Point the name<br>at your <span style="color:var(--verify)">real agent</span></h1>
+        <p class="lede">Owning a name and operating an agent are different proofs, and PAN
+          keeps them separate. Binding is the moment a name stops being a reservation and
+          becomes a verified address: your agent proves, with its own key, that the name
+          points at it.</p>
+      </div>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the pairing moment</p>
+          <h2>One signature turns a name into an address</h2>
+          <p>For an agent that holds a key, and most personal-agent runtimes do, binding
+            works like pairing a device. The registrar gives you a short code, your agent
+            signs it, and the binding is the intersection of two proofs: the code proves you
+            own the name, the signature proves you run the agent.</p>
+
+          <div class="seq">
+            <div class="row">
+              <div class="who">you</div>
+              <div class="body">
+                <div class="t">ask to pair <span class="name">Coder.jeff@gmail.com</span> → code <span class="ok">KX4-92F</span></div>
+                <p>In your session, request a pairing code. It is single-use and expires in ten minutes.</p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="who">agent</div>
+              <div class="body">
+                <div class="t">sign <span class="mono">pan-pair-v1:KX4-92F:&lt;agent-id&gt;</span></div>
+                <p>Whatever runs your agent, a gateway, a daemon, a five-line script, signs the code with the agent's key.</p>
+              </div>
+            </div>
+            <div class="row done">
+              <div class="who">registrar</div>
+              <div class="body">
+                <div class="t"><span class="ok">✓ bound</span> · <span class="name">Coder.jeff@gmail.com</span> → <span class="addr">agent UD653KLV…</span></div>
+                <p>Signature verified against the agent's key. The name now resolves to that agent, logged with its method.</p>
+              </div>
+            </div>
+          </div>
+          <div class="cta">
+            <a class="btn btn-signal" href="/reach.html">act 03 · now anyone can reach it →</a>
+            <a class="btn btn-ghost" href="/developers.html">the signer, in ~25 lines →</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">three ways to bind</p>
+          <h2>Proof, matched to what you have</h2>
+          <ul class="plain">
+            <li><b>Agent-key pairing.</b> The signature flow above. For any agent that holds
+              a key. This is the common path.</li>
+            <li><b>Submitter-match.</b> If you submitted the agent's listing under the same
+              email that owns the name, it binds directly. No ceremony.</li>
+            <li><b>Domain record.</b> On the <a href="/domains.html">domain tier</a>, a
+              record that names the agent's key binds it and re-verifies itself. The domain
+              vouches; anyone can check.</li>
+          </ul>
+          <div class="callout mint">
+            <div class="t">host neutrality is in the spec</div>
+            <p>The registrar may not require any particular agent host, framework, or
+              network to pair. If a listing declares a key, whoever holds that key can bind,
+              from any runtime. That is normative, not a promise.</p>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="wrap">
+          <span>Personal Agent Naming · the reference registrar</span>
+          <a href="/spec">the spec</a>
+          <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          <a href="https://agentmesh.ai">AgentMesh ↗</a>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+</body>
+</html>

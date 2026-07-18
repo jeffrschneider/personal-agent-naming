@@ -1,195 +1,154 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agent Catalog · A name for your agent</title>
-<meta name="description" content="PAN, Personal Agent Naming: give your AI agent a public name anchored to the email you already own. Claim it in 30 seconds.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📇</text></svg>">
-<link rel="stylesheet" href="/site.css">
-<style>
-  header.hero { padding: 4rem 0 0; }
-  .hero-annot { position: relative; padding-bottom: 118px; }
-  .hero-handle { font-family: var(--mono); font-weight: 600; letter-spacing: -.02em;
-    font-size: clamp(1rem, 4.2vw, 3rem); line-height: 1.15; white-space: nowrap; }
-  .hero-handle .hname { color: var(--brass); }
-  #annot-svg { position: absolute; inset: 0; width: 100%; height: 100%;
-    overflow: visible; pointer-events: none; }
-  #annot-svg text { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; }
-  .hero p.lede { max-width: 54ch; color: var(--muted); font-size: 1.08rem; margin: 1.4rem 0 2rem; }
-
-  .claim-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-    padding: 1.4rem 1.5rem; display: grid; gap: 1rem; max-width: 620px; }
-  .cstep { display: grid; gap: .3rem; }
-  .clabel { font-family: var(--mono); font-size: .68rem; text-transform: uppercase;
-    letter-spacing: .1em; color: var(--muted); }
-  .cfield { display: flex; gap: .6rem; }
-  .cinput { flex: 1; background: var(--surface-2); border: 1px solid var(--border);
-    border-radius: 8px; padding: .55rem .8rem; color: var(--text); font-size: .92rem; min-width: 0; }
-  .cbtn { background: var(--brass); color: #241a06; border: none; border-radius: 8px;
-    padding: .55rem 1rem; font-weight: 650; font-size: .88rem; flex-shrink: 0; }
-  .chint { color: var(--muted); font-size: .8rem; }
-  .cpreview { font-family: var(--mono); font-size: .88rem; color: var(--brass); }
-  .cpreview .ok { color: var(--green); font-family: var(--sans); font-size: .8rem; }
-  .claim-note { color: var(--muted); font-size: .8rem; max-width: 620px; margin-top: .8rem; }
-
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Agent Naming</title>
+  <meta name="description" content="PAN gives a personal agent a public name anchored to the email you already own, bound to the real agent, and resolvable to an address other agents can reach.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/site.css">
+  <style>
+    .handle-fig{ margin:34px 0 4px; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+      overflow:hidden; box-shadow:0 30px 70px -40px rgba(0,0,0,.9); }
+    .handle-fig .bar{ display:flex; align-items:center; gap:8px; padding:11px 16px; border-bottom:1px solid var(--line);
+      font-family:var(--wire); font-size:.74rem; color:var(--dim); background:rgba(255,255,255,.015); }
+    .handle-fig .bar .lamp{ width:8px; height:8px; border-radius:50%; background:var(--verify); box-shadow:0 0 10px var(--verify); }
+    .handle-fig pre{ margin:0; padding:20px 18px; font-family:var(--wire); font-size:.86rem; line-height:1.95; color:var(--paper); overflow-x:auto; }
+    .handle-fig pre .name{ color:var(--signal); }
+    .handle-fig pre .k{ color:var(--faint); }
+    .handle-fig pre .ok{ color:var(--verify); }
+    .handle-fig pre .addr{ color:var(--address); }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <nav>
-    <a class="brand" href="/">Agent<span>Catalog</span></a>
-    <span class="links">
-      <a href="/why.html">Why now</a>
-      <a href="/standard.html">The standard</a>
-      <a href="/developers.html">For developers</a>
-      <a href="/spec">The spec</a>
-      <a href="https://agent-catalog-68925516043.us-central1.run.app/">Look up a handle</a>
-    </span>
-  </nav>
+  <div class="layout">
 
-  <header class="hero">
-    <div class="eyebrow">A name for your agent</div>
-    <div class="hero-annot" id="hero-annot">
-      <div class="hero-handle"><span class="hname" id="hh-name">Coder</span><span>.</span><span id="hero-you">you@gmail.com</span></div>
-      <svg id="annot-svg" aria-hidden="true">
-        <defs>
-          <marker id="arr-brass" viewBox="0 0 8 8" refX="4" refY="1.5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0.5 7 L 4 1 L 7.5 7" fill="none" stroke="#d9a441" stroke-width="1.4" stroke-linecap="round"/>
-          </marker>
-          <marker id="arr-muted" viewBox="0 0 8 8" refX="4" refY="1.5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0.5 7 L 4 1 L 7.5 7" fill="none" stroke="#8695a8" stroke-width="1.4" stroke-linecap="round"/>
-          </marker>
-        </defs>
-        <g id="annot-g"></g>
-      </svg>
-    </div>
-    <p class="lede">
-      Your agent works for you every day and has no name anyone else can use.
-      PAN, Personal Agent Naming, fixes that: one unique string, anchored to
-      the email you already own. Claim it in 30 seconds. Put it in your email
-      signature.
-    </p>
-    <div class="cta-row">
-      <a class="btn" href="https://agent-catalog-68925516043.us-central1.run.app/?claim=1">Claim your agent's name</a>
-      <a class="btn ghost" href="/standard.html">How it works</a>
-    </div>
-    <div class="fine">Free. No account beyond your inbox. The registrar indexes and verifies; it never hosts your agent.</div>
-  </header>
+    <aside class="rail">
+      <a class="brand" href="/"><span class="dot"></span>PAN</a>
+      <nav>
+        <div class="grp">overview</div>
+        <a class="on" href="/">/ what PAN is</a>
+        <a href="/why-names.html">/ why names</a>
+        <div class="grp">claim</div>
+        <a href="/claim.html">/ claim a name</a>
+        <a href="/domains.html">/ domains</a>
+        <div class="grp">bind</div>
+        <a href="/pair.html">/ pair your agent</a>
+        <div class="grp">reach</div>
+        <a href="/reach.html">/ resolve &amp; reach</a>
+        <div class="grp">reference</div>
+        <a href="/spec">/ the spec</a>
+        <a href="/developers.html">/ for developers</a>
+        <a href="/trust.html">/ trust &amp; privacy</a>
+      </nav>
+      <div class="foot">personal agent naming · v0.2-draft<br>the reference registrar</div>
+    </aside>
 
-  <section id="claim">
-    <div class="sec-eyebrow">Thirty seconds, timed</div>
-    <h2>Claiming looks like this.</h2>
-    <div class="claim-box" aria-label="The claim flow, illustrated">
-      <div class="cstep">
-        <span class="clabel">1 · The email you already own</span>
-        <div class="cfield"><input class="cinput" value="you@gmail.com" readonly><button class="cbtn" tabindex="-1">Send code</button></div>
-        <span class="chint">This is the anchor. Whoever controls this inbox controls the handles under it.</span>
+    <main class="main">
+
+      <div class="wrap hero">
+        <span class="eyebrow"><span class="tag">pan</span> · personal agent naming · v0.2</span>
+        <h1>A name for your agent,<br>and an <span class="am">address</span> behind it</h1>
+        <p class="lede">Personal agents outnumber every other kind, and almost none of them
+          have names. PAN gives your agent a public name, anchored to the email you already
+          own, bound to the real agent, and resolvable to an address other agents can reach.</p>
+        <div class="cta">
+          <a class="btn btn-signal" href="/claim.html">claim a name</a>
+          <a class="btn btn-ghost" href="/spec">read the spec</a>
+        </div>
+
+        <div class="handle-fig">
+          <div class="bar"><span class="lamp"></span> resolve · <span class="name">Coder.jeff@gmail.com</span></div>
+<pre><span class="k">handle </span> <span class="name">Coder.jeff@gmail.com</span>
+<span class="k">bound  </span> <span class="ok">✓ agent-key</span>       <span class="k">presence</span> <span class="ok">online</span>
+<span class="k">reach  </span> <span class="addr">agentmesh</span> · agent <span class="addr">UD653KLV…</span> @ node <span class="addr">UB2FF…</span></pre>
+        </div>
       </div>
-      <div class="cstep">
-        <span class="clabel">2 · Six digits, from your inbox</span>
-        <div class="cfield"><input class="cinput mono" value="4 8 2 9 1 7" readonly><button class="cbtn" tabindex="-1">Verify</button></div>
-        <span class="chint">Expires in 15 minutes. That one verification is all the registrar ever asks of you.</span>
-      </div>
-      <div class="cstep">
-        <span class="clabel">3 · Name your agent</span>
-        <div class="cfield"><input class="cinput" value="Coder" readonly><button class="cbtn" tabindex="-1">Claim</button></div>
-        <div class="cpreview">Coder.you@gmail.com <span class="ok">✓ available</span></div>
-        <span class="chint">Any name up to 64 characters. Dots allowed. First come, first served, across the whole registry.</span>
-      </div>
-    </div>
-    <div class="claim-note">
-      Illustration; the real flow runs on
-      <a href="https://agent-catalog-68925516043.us-central1.run.app/">the live registrar</a>.
-      Have a domain? There's a second tier, <span class="mono">Coder@yourdomain.com</span>,
-      claimed by publishing one file or one DNS record that anyone on the
-      internet can re-verify without trusting us.
-      <a href="/standard.html">Details on the standard page.</a>
-    </div>
-  </section>
 
-  <section>
-    <div class="sec-eyebrow">Keep going</div>
-    <h2>Why this exists, and what a name proves.</h2>
-    <p class="sec-lede">
-      The most numerous agents on earth have no names, and a name is only
-      half of trust. The story continues on
-      <a href="/why.html">Why now</a>, and the rules live on
-      <a href="/standard.html">The standard</a>.
-    </p>
-  </section>
+      <!-- THE ARC : the spine of the whole thing -->
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the arc</p>
+          <h2>Claim it, bind it, reach it</h2>
+          <p>A name on its own points at nothing. PAN is the short path from a string you
+            pick to an address the world can use. Three moves, and the colors carry through
+            the whole site: the name is amber, a verified binding is mint, the address is blue.</p>
 
-  <div class="eco">
-    <b>ARD</b> finds · <b>A2A</b> talks · <b>AgentMesh</b> connects ·
-    <span class="us">PAN names</span>
+          <div class="arc">
+            <div class="act" style="--hue:var(--signal)">
+              <div class="n">act 01 · claim</div>
+              <h3>Get the name</h3>
+              <p>Prove control of an email, pick a name, and it is yours:
+                <span class="mono amber">Coder.jeff@gmail.com</span>. Thirty seconds, no
+                account beyond your inbox.</p>
+              <a href="/claim.html">claim a name →</a>
+            </div>
+            <div class="act" style="--hue:var(--verify)">
+              <div class="n">act 02 · bind</div>
+              <h3>Point it at your agent</h3>
+              <p>Pairing attaches the name to a real agent: your agent signs a code with its
+                own key. Now the name resolves to that agent, provably, not just to a claim.</p>
+              <a href="/pair.html">pair your agent →</a>
+            </div>
+            <div class="act" style="--hue:var(--address)">
+              <div class="n">act 03 · reach</div>
+              <h3>Others use it</h3>
+              <p>Anyone resolves the handle to a card: a verified address with typed
+                endpoints. Their agent hands that address to the mesh and reaches yours.</p>
+              <a href="/reach.html">resolve &amp; reach →</a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WHAT PAN IS -->
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">what it is, and is not</p>
+          <h2>PAN does one thing</h2>
+          <p>It names agents, binds names to them, and defines what a resolved name returns.
+            It does not carry messages, does not grade capabilities, and does not host
+            anything. A resolved handle is a verified <b>address</b>: the talking on top of
+            it belongs to the messaging layer.</p>
+          <p class="pull">A handle is an address, not a badge. PAN gets you the address.
+            AgentMesh and A2A do the reaching.</p>
+        </div>
+      </section>
+
+      <!-- WHERE PAN SITS -->
+      <section class="band">
+        <div class="wrap">
+          <p class="kicker">the stack</p>
+          <h2>Where naming sits</h2>
+          <p>The agent web is assembling a stack, one spec per job. PAN claims the naming
+            job: turning a human-handleable string into an address the other layers can act
+            on.</p>
+          <p style="font-family:var(--disp); font-size:1.3rem; font-weight:600; color:var(--paper); margin-top:22px; max-width:none;">
+            <span class="verify">ARD</span> finds.
+            <span class="blue">A2A</span> talks.
+            <span style="color:var(--broadcast)">AgentMesh</span> connects.
+            <span class="amber">PAN</span> names.</p>
+          <div class="docs">
+            <a href="/claim.html"><div class="h">/ claim</div><h3>Claim a name</h3><p>The 30-second flow: email, code, name. Yours across the whole registry.</p></a>
+            <a href="/pair.html"><div class="h">/ bind</div><h3>Pair your agent</h3><p>One signature turns the name into a verified address for the real agent.</p></a>
+            <a href="/reach.html"><div class="h">/ reach</div><h3>Resolve &amp; reach</h3><p>A handle resolves to a card. The card is the address the mesh reaches.</p></a>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <div class="wrap">
+          <span>Personal Agent Naming · the reference registrar</span>
+          <a href="/spec">the spec</a>
+          <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub ↗</a>
+          <a href="https://agentmesh.ai">AgentMesh ↗</a>
+        </div>
+      </footer>
+
+    </main>
   </div>
-
-  <footer>
-    <span>Agent Catalog</span>
-    <a href="/spec">The spec</a>
-    <a href="https://github.com/jeffrschneider/Agent-Catalog-ARD">GitHub</a>
-    <a href="https://agentmesh.ai">AgentMesh</a>
-    <span style="margin-left:auto">Reference registrar for PAN v0.2-draft</span>
-  </footer>
-</div>
-
-<script>
-  const YOUS = ["you@gmail.com", "maria.lopez@outlook.com", "dev@fastmail.com", "jeff.r@icloud.com"];
-  let yi = 0;
-  const heroYou = document.getElementById("hero-you");
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  // Callouts: underline each segment of the handle and point a labeled
-  // leader line at it. Redrawn on rotation and resize because the email
-  // segment changes width.
-  const annot = document.getElementById("hero-annot");
-  const nameEl = document.getElementById("hh-name");
-  const annotG = document.getElementById("annot-g");
-  const BRASS = "#d9a441", MUTED = "#8695a8";
-
-  function drawAnnot() {
-    const c = annot.getBoundingClientRect();
-    const rel = (r) => ({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
-    const n = rel(nameEl.getBoundingClientRect());
-    const y = rel(heroYou.getBoundingClientRect());
-    const uy = Math.max(n.y + n.h, y.y + y.h) + 6;
-    const narrow = c.width < 560;
-
-    // Label rows: name first, anchor second; on narrow screens both left-aligned.
-    const nameL = { x: n.x + 2, y: uy + 44, anchor: "start",
-      text: "YOUR AGENT'S NAME. YOU PICK IT.", color: BRASS,
-      lineFrom: { x: n.x + 30, y: uy + 32 } };
-    const youL = { x: narrow ? n.x + 2 : Math.min(y.x + y.w, c.width - 4), y: uy + 82,
-      anchor: narrow ? "start" : "end",
-      text: "THE EMAIL YOU ALREADY OWN. THE ANCHOR.", color: MUTED,
-      lineFrom: { x: Math.min(y.x + y.w * 0.7, c.width - 40), y: uy + 70 } };
-
-    const seg = (rect, color) =>
-      `<line x1="${rect.x}" y1="${uy}" x2="${rect.x + rect.w}" y2="${uy}" stroke="${color}" stroke-width="2" stroke-linecap="round"/>`;
-    const leader = (from, toX, color, marker) => {
-      const midY = (from.y + uy) / 2 + 6;
-      return `<path d="M ${from.x} ${from.y} Q ${from.x} ${midY}, ${(from.x + toX) / 2} ${midY} T ${toX} ${uy + 5}"
-        fill="none" stroke="${color}" stroke-width="1.4" marker-end="url(#${marker})"/>`;
-    };
-    const label = (l) =>
-      `<text x="${l.x}" y="${l.y}" fill="${l.color}" text-anchor="${l.anchor}">${l.text}</text>`;
-
-    annotG.innerHTML =
-      seg(n, BRASS) + seg(y, MUTED) +
-      leader(nameL.lineFrom, n.x + n.w / 2, BRASS, "arr-brass") +
-      leader(youL.lineFrom, y.x + y.w / 2, MUTED, "arr-muted") +
-      label(nameL) + label(youL);
-  }
-  drawAnnot();
-  addEventListener("resize", drawAnnot);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawAnnot);
-
-  if (!reduced) setInterval(() => {
-    yi = (yi + 1) % YOUS.length;
-    heroYou.textContent = YOUS[yi];
-    drawAnnot();
-  }, 2600);
-
-</script>
 </body>
 </html>
