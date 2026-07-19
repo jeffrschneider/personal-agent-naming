@@ -69,8 +69,10 @@ Control of the mailbox authorizes claims under it.
 1. Claimant submits the anchor email to the registrar.
 2. Registrar delivers a short verification code (6 digits, ≤15-minute
    expiry) to that mailbox, and accepts a bounded number of attempts.
-3. A correct code yields a short-lived session (≤30 minutes) under which the
-   claimant may claim handles, bind, release, and list their handles.
+3. A correct code yields a bounded session under which the claimant may
+   claim handles, bind, release, and list their handles. Registrars choose
+   the lifetime; the reference registrar uses 8 hours (long enough to manage
+   a roster, short enough that the emailed code stays the real credential).
 
 Registrars MUST rate-limit code issuance per anchor.
 

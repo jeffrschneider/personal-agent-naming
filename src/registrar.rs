@@ -15,7 +15,7 @@ use uuid::Uuid;
 /// drawer shouldn't silently start pointing at a stranger.
 const COOLING_OFF_DAYS: i64 = 90;
 const CODE_TTL_MIN: i64 = 15;
-const SESSION_TTL_MIN: i64 = 30;
+const SESSION_TTL_MIN: i64 = 480; // 8h console sessions (user call 2026-07-18)
 const MAX_CODES_PER_HOUR: i64 = 5;
 const MAX_CODE_ATTEMPTS: i32 = 5;
 

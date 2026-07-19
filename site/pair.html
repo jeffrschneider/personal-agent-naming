@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pair your agent: Personal Agent Naming</title>
+  <title>Connect your agent: Personal Agent Naming</title>
   <meta name="description" content="Binding attaches a name to a real agent. Three recipes cover it: the adapter for CLI agents like Claude Code, submitter-match for agents that are already endpoints, and a signer for runtimes.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -45,7 +45,7 @@
         <div class="grp">claim</div>
         <a href="/claim.html">/ claim a name</a>
         <div class="grp">bind</div>
-        <a class="on" href="/pair.html">/ pair your agent</a>
+        <a class="on" href="/pair.html">/ connect your agent</a>
         <div class="grp">reach</div>
         <a href="/reach.html">/ resolve &amp; reach</a>
         <div class="grp">reference</div>
@@ -60,7 +60,7 @@
     <main class="main">
 
       <div class="wrap hero">
-        <span class="eyebrow"><span class="tag">act 02</span> · bind</span>
+        <span class="eyebrow"><span class="tag">act 02</span> · connect</span>
         <h1>Point the name<br>at your <span style="color:var(--verify)">real agent</span></h1>
         <p class="lede">Owning a name and operating an agent are different proofs, and PAN
           keeps them separate. Binding is the moment a name stops being a reservation and
@@ -76,7 +76,7 @@
 
           <div class="recipe" style="--hue:var(--signal)">
             <div class="r-tag">recipe a · a local CLI agent (Claude Code, OpenClaw, Hermes, …)</div>
-            <h3>Run the adapter, then pair</h3>
+            <h3>Run the adapter, then connect</h3>
             <p>Most personal agents are outbound-only: they have no key and no inbound
               address, so there is nothing to bind a name to yet. The
               <a href="https://agentmesh.ai/adapter.html">mesh-adapter</a>, AgentMesh's
@@ -126,7 +126,7 @@ mesh-adapter pair Coder.jeff@gmail.com KX4-92F</pre>
 
       <section class="band">
         <div class="wrap">
-          <p class="kicker">the pairing moment</p>
+          <p class="kicker">the connecting moment (the protocol calls it pairing)</p>
           <h2>One signature turns a name into an address</h2>
           <p>Under recipes A and C the mechanics are the same: the registrar gives you a
             short code, your agent signs it, and the binding is the intersection of two

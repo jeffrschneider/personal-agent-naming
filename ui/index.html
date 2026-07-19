@@ -15,23 +15,26 @@
   <a class="brand" href="/app">PAN</a>
   <span class="top-sub muted">the registrar</span>
   <span style="margin-left:auto"></span>
-  <a href="#" id="nav-lookup" class="top-link">look up any handle</a>
   <span id="who" class="top-who mono" hidden></span>
   <button id="sign-out" class="top-link as-btn" hidden>sign out</button>
 </header>
 
-<!-- ═══ the console: your agent names ═══ -->
+<!-- ═══ the console: one screen ═══ -->
 <main class="wrap console-wrap" id="view-console">
 
   <div class="page-head">
     <h1>Your agent names</h1>
-    <p class="page-sub">Each agent you run can have a name. The name plus your email is its
-      <b>handle</b>: one unique string anyone can resolve to your agent's card and address.
-      Claim names here, pair them to your agents, release the ones you retire.</p>
+    <p class="page-sub">A name plus your email is a <b>handle</b>: one string anyone can
+      resolve to your agent. Claim a name, connect it to the agent that answers for it.</p>
+    <div class="op-line muted" id="op-line" hidden>
+      Operator: <b id="op-current"></b>
+      <span class="muted">(shown on all your cards)</span>
+      · <a href="#" id="op-edit">change</a>
+    </div>
   </div>
 
   <!-- signed out: the gate -->
-  <section id="gate" class="panel" hidden>
+  <section id="gate" class="panel gate-panel" hidden>
     <div id="gate-email" class="gate-step">
       <label class="claim-label" for="claim-email">Your email (the anchor your names live under)</label>
       <div class="claim-row">
@@ -50,73 +53,40 @@
     </div>
   </section>
 
-  <!-- signed in: the roster -->
+  <!-- signed in: the table -->
   <section id="console" hidden>
-    <div class="op-line muted" id="op-line" hidden>
-      Operator: <b id="op-current"></b>
-      <span class="muted">(shown on all your cards)</span>
-      · <a href="#" id="op-edit">change</a>
-    </div>
-
     <div class="panel table-panel">
-      <table class="names-table" id="names-table" hidden>
-        <thead><tr>
-          <th>Agent name</th><th>Handle</th><th>Status</th><th class="ta-r"></th>
-        </tr></thead>
-        <tbody id="names-body"></tbody>
+      <table class="names-table">
+        <thead><tr><th>Agent name</th><th>Handle</th><th>Status</th><th class="ta-r"></th></tr></thead>
+        <tbody id="rows"></tbody>
+        <tbody>
+          <tr class="addbar">
+            <td colspan="2">
+              <div id="op-field" hidden style="margin-bottom:.6rem">
+                <label class="claim-label" for="op-name" style="margin-top:0">Your public name (the operator, required once)</label>
+                <input id="op-name" class="inp" placeholder="Jeff Schneider" autocomplete="name" style="width:100%">
+              </div>
+              <input id="add-name" class="inp" placeholder="Add an agent name, e.g. MacClaude" autocomplete="off" style="width:100%">
+              <div class="prev mono" id="add-prev"></div>
+            </td>
+            <td colspan="2" style="vertical-align:top"><button class="btn" id="add-btn">Claim</button></td>
+          </tr>
+        </tbody>
       </table>
-
-      <div id="names-empty" class="empty-state" hidden>
-        <p><b>No agent names yet.</b></p>
-        <p class="muted">Claim your first: pick a name for an agent you run (its handle
-          becomes <span class="mono" id="empty-preview">Name.you@example.com</span>),
-          then pair it so the name points at the real agent.</p>
-      </div>
-
-      <div id="pair-info" class="pair-info" hidden></div>
-
-      <div class="table-foot">
-        <button id="add-open" class="btn">+ Add an agent name</button>
-      </div>
+      <div id="add-msg" class="claim-msg"></div>
     </div>
-
-    <!-- add form -->
-    <section id="add-form" class="panel" hidden>
-      <div class="d-head"><h2>New agent name</h2>
-        <button class="d-close" id="add-close" aria-label="Close">✕</button></div>
-      <div id="op-field" hidden>
-        <label class="claim-label" for="op-name">Your public name (the operator)</label>
-        <input id="op-name" class="inp" placeholder="Jeff Schneider" autocomplete="name">
-        <div class="claim-msg muted" style="margin-top:.25rem">Required once. Shown on every
-          card of your handles: your chosen label, anchored to your verified email.</div>
-      </div>
-      <label class="claim-label" for="claim-name">Agent name (the part before your email)</label>
-      <input id="claim-name" class="inp" placeholder="DellClaude" autocomplete="off">
-      <div class="handle-preview mono" id="handle-preview"></div>
-      <div class="claim-row" style="margin-top:.8rem">
-        <button id="claim-do" class="btn">Claim it</button>
-      </div>
-      <div id="claim-msg" class="claim-msg"></div>
-    </section>
   </section>
 </main>
 
-<!-- ═══ lookup: anyone's handle, its public card ═══ -->
-<main class="wrap lookup-wrap" id="view-lookup" hidden>
-  <div class="lk-hero">
-    <h1>Look up a handle</h1>
-    <p class="lk-sub">Any handle resolves to its public card: who operates it, how it's
-      bound, and the address other agents reach it at.</p>
-    <div class="lk-row">
-      <input id="lk-input" class="inp mono lk-input" type="search"
-             placeholder="Coder.you@gmail.com" autocomplete="off"
-             spellcheck="false">
-      <button id="lk-btn" class="btn">Resolve</button>
-    </div>
-    <div id="lk-msg" class="lk-msg"></div>
-    <p class="muted" style="margin-top:1rem"><a href="#" id="nav-console">← your agent names</a></p>
+<!-- ═══ the public card (share links: /app?h=<handle>) ═══ -->
+<main class="wrap lookup-wrap" id="view-card" hidden>
+  <div class="lk-hero" style="padding-bottom:.6rem">
+    <h1 style="font-size:1.4rem">The public card</h1>
+    <p class="lk-sub">What anyone resolving this handle sees.</p>
   </div>
+  <div id="lk-msg" class="lk-msg" style="text-align:center"></div>
   <div id="lk-card" class="profile" hidden></div>
+  <p class="muted" style="text-align:center"><a href="/app">PAN · claim a name of your own →</a></p>
 </main>
 
 <script src="/ui/app.js"></script>
