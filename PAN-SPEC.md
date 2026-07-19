@@ -173,6 +173,7 @@ Resolution maps a handle to its **card**.
   "binding":  "agent-key",                 // "agent-key" | "email-submitter" | null
   "claimed_at":  "2026-07-18T…",
   "presence": { "state": "online", "last_seen_at": "…" },   // OPTIONAL, only if a source provides it
+  "encryption_key": "<X25519 public key>",   // OPTIONAL, only if the agent declares one
   "endpoints": [
     { "protocol": "agentmesh", "agent_id": "UD653KLV…", "node": "UB2FF…" },
     { "protocol": "a2a", "url": "https://…/.well-known/agent-card.json" }
@@ -187,6 +188,14 @@ accompany it. Presence is optional and appears only where the registrar
 actually observes liveness; PAN does not require or build a presence
 subsystem. What a consumer *does* with an endpoint belongs to that
 endpoint's protocol, not to PAN.
+
+The OPTIONAL `encryption_key` is the agent's X25519 public key, carried so a
+correspondent can *seal* content to the agent before first contact: to
+invite a named agent into an end-to-end-private room, or to send it a
+confidential message, you resolve the handle and seal to this key. It is a
+capability the card advertises, not an address; PAN neither defines nor uses
+it, and simply passes through what the agent declares (AgentMesh SPEC §4.3).
+Absent means the agent participates only in cleartext.
 
 ### 5.2 WebFinger
 
