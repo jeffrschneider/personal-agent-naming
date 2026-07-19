@@ -379,13 +379,14 @@ async fn handles_mine(
         .map(|h| {
             let mut v = serde_json::to_value(h).unwrap_or_default();
             if let (Some(id), Some(obj)) = (h.listing_id, v.as_object_mut()) {
-                if let Some((ip, at, kind, host, platform, first)) = seen.get(&id) {
+                if let Some((ip, at, kind, host, platform, first, enc_key)) = seen.get(&id) {
                     obj.insert("last_seen_ip".into(), serde_json::json!(ip));
                     obj.insert("last_seen_ip_at".into(), serde_json::json!(at));
                     obj.insert("agent_kind".into(), serde_json::json!(kind));
                     obj.insert("agent_host".into(), serde_json::json!(host));
                     obj.insert("agent_platform".into(), serde_json::json!(platform));
                     obj.insert("first_connected_at".into(), serde_json::json!(first));
+                    obj.insert("encryption_key".into(), serde_json::json!(enc_key));
                 }
             }
             v
@@ -479,7 +480,7 @@ fn build_card(
     // The declared agent profile (kind/host/platform) is public by decision:
     // self-declared, User-Agent trust class. IP and timestamps from the same
     // row stay owner-only and are NOT read here.
-    let agent = agent_decl.and_then(|(_, _, kind, host, platform, _)| {
+    let agent = agent_decl.and_then(|(_, _, kind, host, platform, _, _)| {
         if kind.is_some() || host.is_some() || platform.is_some() {
             Some(serde_json::json!({
                 "kind": kind, "host": host, "platform": platform,
@@ -489,6 +490,10 @@ fn build_card(
             None
         }
     });
+    // The encryption key (SPEC 4.3 / PAN SPEC 5.1): public so a correspondent
+    // can seal content to this agent before first contact. A capability the
+    // card advertises, not an address; absent means cleartext only.
+    let encryption_key = agent_decl.and_then(|(_, _, _, _, _, _, ek)| ek.clone());
     let mut endpoints: Vec<serde_json::Value> = Vec::new();
     if let Some(l) = listing {
         // A key-bearing agent: the key is the address (its mesh inbox).
@@ -515,6 +520,7 @@ fn build_card(
         // handles — but NOT verified identity.
         "operator": operator_name.map(|n| serde_json::json!({ "name": n })),
         "agent": agent,
+        "encryption_key": encryption_key,
         "binding": h.bind_method,
         "claimed_at": h.created_at,
         "reserved": listing.is_none(),
