@@ -391,3 +391,4 @@ a.brand { color: var(--paper); }
 .gate-panel{max-width:560px}
 .ip{font-size:.76rem;color:var(--address)}
 .ipcell{white-space:nowrap}
+.nm-sub{font-family:var(--wire);font-size:.68rem;font-weight:400;margin-top:.15rem}

@@ -150,7 +150,8 @@ function renderRoster(handles) {
     const connected = !!h.listing_id;
     let rows = `
     <tr>
-      <td class="nm">${esc(namePart(h.handle))}</td>
+      <td class="nm">${esc(namePart(h.handle))}${h.agent_kind
+        ? `<div class="nm-sub muted" title="${esc(h.agent_kind)}${h.agent_host ? ` · via ${esc(h.agent_host)}` : ""}${h.agent_platform ? ` · ${esc(h.agent_platform)}` : ""} (self-declared by the agent)">${esc(h.agent_kind)}</div>` : ""}</td>
       <td><span class="handle-chip js-copy" data-h="${esc(h.handle)}" title="Click to copy">${esc(h.handle)}</span><a
         class="ext" href="/app?h=${encodeURIComponent(h.handle)}" target="_blank" rel="noopener"
         title="The public card: what anyone resolving this handle sees">↗</a></td>
@@ -317,6 +318,9 @@ async function renderCard(handle) {
   const operator = c.operator && c.operator.name
     ? `<div class="d-sub">operated by <b>${esc(c.operator.name)}</b> <span class="muted">(their chosen label, anchored to their verified email)</span></div>`
     : "";
+  const agentDecl = c.agent && (c.agent.kind || c.agent.host || c.agent.platform)
+    ? `<div class="d-sub">agent: <b>${esc(c.agent.kind || "unspecified")}</b>${c.agent.host ? ` · via ${esc(c.agent.host)}` : ""}${c.agent.platform ? ` · ${esc(c.agent.platform)}` : ""} <span class="muted">(self-declared)</span></div>`
+    : "";
   if (c.reserved) {
     card.innerHTML = `<div class="d-head"><h2>${esc(c.handle)}</h2></div>
       ${operator}
@@ -336,6 +340,7 @@ async function renderCard(handle) {
       ${presence}
     </div>
     ${operator}
+    ${agentDecl}
     <div class="d-section"><h3>Connected</h3>
       <div>${c.binding ? `<span class="seal good">✓ ${esc(c.binding)}</span>` : `<span class="muted">not connected</span>`}
         <span class="muted" style="margin-left:.5rem">claimed ${ago(c.claimed_at) || ""}</span></div>

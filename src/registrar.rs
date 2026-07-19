@@ -507,29 +507,57 @@ pub async fn resolve(pool: &PgPool, handle: &str) -> Result<Option<Handle>, Regi
     .await?)
 }
 
-/// Record where an agent last connected from (owner-facing provenance).
-pub async fn record_agent_ip(pool: &PgPool, agent_id: &str, ip: &str) -> Result<(), RegistrarError> {
+/// The declared agent profile (User-Agent trust class): what kind of agent,
+/// hosted by what, on which platform. Signed into the check-in canonical.
+#[derive(Debug, Default, Clone, serde::Deserialize)]
+pub struct AgentProfile {
+    pub kind: Option<String>,
+    pub host: Option<String>,
+    pub platform: Option<String>,
+}
+
+/// Record where an agent last connected from (owner-facing provenance) and,
+/// when declared, its profile. Profile fields only overwrite when supplied;
+/// first_connected_at is set once.
+pub async fn record_agent_seen(
+    pool: &PgPool,
+    agent_id: &str,
+    ip: &str,
+    profile: &AgentProfile,
+) -> Result<(), RegistrarError> {
+    let trim = |o: &Option<String>| o.as_deref().map(str::trim).filter(|s| !s.is_empty() && s.chars().count() <= 80).map(str::to_string);
     sqlx::query(
-        "UPDATE listings SET last_seen_ip = $2, last_seen_ip_at = now() \
+        "UPDATE listings SET last_seen_ip = $2, last_seen_ip_at = now(), \
+           first_connected_at = COALESCE(first_connected_at, now()), \
+           agent_kind = COALESCE($3, agent_kind), \
+           agent_host = COALESCE($4, agent_host), \
+           agent_platform = COALESCE($5, agent_platform) \
          WHERE source IN ('agent','agentmesh') AND source_id = $1",
     )
     .bind(agent_id.trim())
     .bind(ip)
+    .bind(trim(&profile.kind))
+    .bind(trim(&profile.host))
+    .bind(trim(&profile.platform))
     .execute(pool)
     .await?;
     Ok(())
 }
 
-/// Signed check-in (adapter start): proves key control, refreshes last-seen.
-/// Canonical string: `pan-checkin-v1:<unix_seconds>:<agent-id>`; the timestamp
-/// must be within a small window so a captured request cannot be replayed
-/// later to plant a stale IP.
+/// Signed check-in (adapter start): proves key control, refreshes last-seen,
+/// and carries the declared profile. Canonicals (newline-joined so free-text
+/// fields cannot create ambiguity):
+///   v1: `pan-checkin-v1:<ts>:<agent-id>`                       (no profile)
+///   v2: "pan-checkin-v2"\n<ts>\n<agent-id>\n<kind>\n<host>\n<platform>
+/// The timestamp must be within a small window so a captured request cannot
+/// be replayed later to plant stale data.
 pub async fn checkin(
     pool: &PgPool,
     agent_id: &str,
     ts: i64,
     signature_b64: &str,
     ip: &str,
+    profile: &AgentProfile,
 ) -> Result<(), RegistrarError> {
     use base64::Engine;
     let now = Utc::now().timestamp();
@@ -539,26 +567,41 @@ pub async fn checkin(
     let sig = base64::engine::general_purpose::STANDARD
         .decode(signature_b64.trim())
         .map_err(|_| RegistrarError::Invalid("signature is not valid base64".into()))?;
-    let msg = format!("pan-checkin-v1:{ts}:{}", agent_id.trim());
-    let kp = agentmesh::KeyPair::from_public_key(agent_id.trim())
+    let agent_id = agent_id.trim();
+    let has_profile = profile.kind.is_some() || profile.host.is_some() || profile.platform.is_some();
+    let msg = if has_profile {
+        [
+            "pan-checkin-v2".to_string(),
+            ts.to_string(),
+            agent_id.to_string(),
+            profile.kind.clone().unwrap_or_default(),
+            profile.host.clone().unwrap_or_default(),
+            profile.platform.clone().unwrap_or_default(),
+        ]
+        .join("\n")
+    } else {
+        format!("pan-checkin-v1:{ts}:{agent_id}")
+    };
+    let kp = agentmesh::KeyPair::from_public_key(agent_id)
         .map_err(|_| RegistrarError::Invalid("agent_id is not a valid public key".into()))?;
     kp.verify(msg.as_bytes(), &sig)
         .map_err(|_| RegistrarError::Invalid("signature does not verify against the agent key".into()))?;
-    record_agent_ip(pool, agent_id, ip).await
+    record_agent_seen(pool, agent_id, ip, profile).await
 }
 
-/// Owner-only: last-seen provenance for a set of listings.
+/// Owner-only: provenance + declared profile for a set of listings.
+pub type SeenRow = (Option<String>, Option<DateTime<Utc>>, Option<String>, Option<String>, Option<String>, Option<DateTime<Utc>>);
 pub async fn last_seen_ips(
     pool: &PgPool,
     listing_ids: &[Uuid],
-) -> Result<std::collections::HashMap<Uuid, (Option<String>, Option<DateTime<Utc>>)>, RegistrarError> {
-    let rows: Vec<(Uuid, Option<String>, Option<DateTime<Utc>>)> = sqlx::query_as(
-        "SELECT id, last_seen_ip, last_seen_ip_at FROM listings WHERE id = ANY($1)",
+) -> Result<std::collections::HashMap<Uuid, SeenRow>, RegistrarError> {
+    let rows: Vec<(Uuid, Option<String>, Option<DateTime<Utc>>, Option<String>, Option<String>, Option<String>, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT id, last_seen_ip, last_seen_ip_at, agent_kind, agent_host, agent_platform, first_connected_at          FROM listings WHERE id = ANY($1)",
     )
     .bind(listing_ids)
     .fetch_all(pool)
     .await?;
-    Ok(rows.into_iter().map(|(id, ip, at)| (id, (ip, at))).collect())
+    Ok(rows.into_iter().map(|(id, ip, at, k, h, pf, fc)| (id, (ip, at, k, h, pf, fc))).collect())
 }
 
 /// Reverse resolution (PAN v0.3): agent key -> its bound handle, if any.

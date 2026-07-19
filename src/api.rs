@@ -174,6 +174,12 @@ fn internal(e: sqlx::Error) -> (StatusCode, String) {
 /// anything a client planted sits on the left and is never reached first.
 /// Falls back to the socket peer (local dev has no proxy).
 fn client_ip(headers: &HeaderMap, peer: Option<std::net::SocketAddr>) -> Option<String> {
+    // Our own load balancer's public forwarding IP(s) also appear as the
+    // rightmost X-Forwarded-For entry and must be skipped (verified in prod:
+    // without this, the LB IP gets recorded as the client). Overridable for
+    // other deployments via LB_PUBLIC_IPS (comma-separated).
+    let lb_ips = std::env::var("LB_PUBLIC_IPS").unwrap_or_else(|_| "8.233.242.102".into());
+    let is_lb = |ip: &std::net::IpAddr| lb_ips.split(',').any(|s| s.trim() == ip.to_string());
     fn is_infra(ip: &std::net::IpAddr) -> bool {
         match ip {
             std::net::IpAddr::V4(v4) => {
@@ -190,7 +196,7 @@ fn client_ip(headers: &HeaderMap, peer: Option<std::net::SocketAddr>) -> Option<
     if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
         for part in xff.split(',').rev() {
             if let Ok(ip) = part.trim().parse::<std::net::IpAddr>() {
-                if !is_infra(&ip) {
+                if !is_infra(&ip) && !is_lb(&ip) {
                     return Some(ip.to_string());
                 }
             }
@@ -373,9 +379,13 @@ async fn handles_mine(
         .map(|h| {
             let mut v = serde_json::to_value(h).unwrap_or_default();
             if let (Some(id), Some(obj)) = (h.listing_id, v.as_object_mut()) {
-                if let Some((ip, at)) = seen.get(&id) {
+                if let Some((ip, at, kind, host, platform, first)) = seen.get(&id) {
                     obj.insert("last_seen_ip".into(), serde_json::json!(ip));
                     obj.insert("last_seen_ip_at".into(), serde_json::json!(at));
+                    obj.insert("agent_kind".into(), serde_json::json!(kind));
+                    obj.insert("agent_host".into(), serde_json::json!(host));
+                    obj.insert("agent_platform".into(), serde_json::json!(platform));
+                    obj.insert("first_connected_at".into(), serde_json::json!(first));
                 }
             }
             v
@@ -421,7 +431,9 @@ async fn pair_complete(
     // Owner-facing provenance: the pairing request comes from the agent's own
     // machine, so its source IP is "last connected from".
     if let Some(ip) = client_ip(&headers, Some(peer)) {
-        registrar::record_agent_ip(&pool, &body.agent_id, &ip).await.map_err(reg_err)?;
+        registrar::record_agent_seen(&pool, &body.agent_id, &ip, &Default::default())
+            .await
+            .map_err(reg_err)?;
     }
     Ok(Json(serde_json::json!({ "ok": true, "handle": handle })))
 }
@@ -431,6 +443,8 @@ struct CheckinBody {
     agent_id: String,
     ts: i64,
     signature: String,
+    #[serde(flatten)]
+    profile: registrar::AgentProfile,
 }
 
 /// Signed agent check-in (adapter start): refreshes "last connected from".
@@ -447,7 +461,7 @@ async fn agent_checkin(
             Json(serde_json::json!({ "ok": false, "error": "could not determine caller address" })),
         ));
     };
-    registrar::checkin(&pool, &body.agent_id, body.ts, &body.signature, &ip)
+    registrar::checkin(&pool, &body.agent_id, body.ts, &body.signature, &ip, &body.profile)
         .await
         .map_err(reg_err)?;
     log::info!("[catalog:registrar] check-in: {} from {ip}", body.agent_id);
@@ -460,7 +474,21 @@ fn build_card(
     h: &registrar::Handle,
     listing: Option<&crate::model::Listing>,
     operator_name: Option<&str>,
+    agent_decl: Option<&registrar::SeenRow>,
 ) -> serde_json::Value {
+    // The declared agent profile (kind/host/platform) is public by decision:
+    // self-declared, User-Agent trust class. IP and timestamps from the same
+    // row stay owner-only and are NOT read here.
+    let agent = agent_decl.and_then(|(_, _, kind, host, platform, _)| {
+        if kind.is_some() || host.is_some() || platform.is_some() {
+            Some(serde_json::json!({
+                "kind": kind, "host": host, "platform": platform,
+                "declared": true,
+            }))
+        } else {
+            None
+        }
+    });
     let mut endpoints: Vec<serde_json::Value> = Vec::new();
     if let Some(l) = listing {
         // A key-bearing agent: the key is the address (its mesh inbox).
@@ -486,6 +514,7 @@ fn build_card(
         // session (PAN v0.3). Anchored, logged, consistent across the owner's
         // handles — but NOT verified identity.
         "operator": operator_name.map(|n| serde_json::json!({ "name": n })),
+        "agent": agent,
         "binding": h.bind_method,
         "claimed_at": h.created_at,
         "reserved": listing.is_none(),
@@ -530,9 +559,16 @@ async fn resolve_handle(
                 None => None,
             };
             let operator = registrar::operator_get(&pool, &h.email).await.map_err(reg_err)?;
+            let decl = match h.listing_id {
+                Some(id) => registrar::last_seen_ips(&pool, &[id])
+                    .await
+                    .map_err(reg_err)?
+                    .remove(&id),
+                None => None,
+            };
             Ok(Json(serde_json::json!({
                 "ok": true,
-                "card": build_card(&h, listing.as_ref(), operator.as_deref()),
+                "card": build_card(&h, listing.as_ref(), operator.as_deref(), decl.as_ref()),
                 "listing": listing,
             })))
         }
