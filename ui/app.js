@@ -55,13 +55,42 @@ function showView(which) {
   $("view-console").hidden = which !== "console";
   $("view-lookup").hidden = which !== "lookup";
 }
-$("nav-lookup").addEventListener("click", (e) => { e.preventDefault(); showView("lookup"); $("lk-input").focus(); });
-$("nav-console").addEventListener("click", (e) => {
-  e.preventDefault();
-  const url = new URL(location); url.searchParams.delete("h");
-  history.replaceState(null, "", url);
+
+// Routing contract: the URL is the state (?h=<handle> = a card, ?find=1 =
+// blank lookup, bare = the console). In-app navigation PUSHES a history
+// entry; popstate re-renders from the URL, so the browser's Back button
+// always works.
+function goLookup(handle, push = true) {
+  if (push) {
+    const url = new URL(location);
+    url.searchParams.delete("claim");
+    if (handle) { url.searchParams.set("h", handle); url.searchParams.delete("find"); }
+    else { url.searchParams.delete("h"); url.searchParams.set("find", "1"); }
+    history.pushState(null, "", url);
+  }
+  showView("lookup");
+  if (handle) { $("lk-input").value = handle; lookup(handle); }
+  else { $("lk-msg").textContent = ""; $("lk-card").hidden = true; $("lk-input").focus(); }
+}
+function goConsole(push = true) {
+  if (push) {
+    const url = new URL(location);
+    for (const k of ["h", "find", "claim"]) url.searchParams.delete(k);
+    history.pushState(null, "", url);
+  }
   showView("console");
-});
+}
+function applyRoute() {
+  const p = new URLSearchParams(location.search);
+  const h = p.get("h");
+  if (h) goLookup(h, false);
+  else if (p.get("find") === "1") goLookup(null, false);
+  else goConsole(false);
+}
+window.addEventListener("popstate", applyRoute);
+
+$("nav-lookup").addEventListener("click", (e) => { e.preventDefault(); goLookup(null); });
+$("nav-console").addEventListener("click", (e) => { e.preventDefault(); goConsole(); });
 
 // ── the console ─────────────────────────────────────────────────────────────
 let operatorName = null;
@@ -166,13 +195,7 @@ async function loadConsole() {
     el.addEventListener("click", () => copyText(el.dataset.h, el));
 
   for (const b of $("names-body").querySelectorAll(".card-btn"))
-    b.addEventListener("click", () => {
-      const url = new URL(location); url.searchParams.set("h", b.dataset.h);
-      history.replaceState(null, "", url);
-      showView("lookup");
-      $("lk-input").value = b.dataset.h;
-      lookup(b.dataset.h);
-    });
+    b.addEventListener("click", () => goLookup(b.dataset.h));
 
   for (const b of $("names-body").querySelectorAll(".rel"))
     b.addEventListener("click", async () => {
@@ -297,9 +320,6 @@ async function lookup(handle) {
   }
   const d = await r.json();
   const c = d.card || {};
-  const url = new URL(location);
-  url.searchParams.set("h", c.handle || handle);
-  history.replaceState(null, "", url);
 
   const operator = c.operator && c.operator.name
     ? `<div class="d-sub">operated by <b>${esc(c.operator.name)}</b> <span class="muted">(their chosen label, anchored to their verified email)</span></div>`
@@ -341,19 +361,12 @@ async function lookup(handle) {
 
 $("lk-btn").addEventListener("click", () => {
   const h = $("lk-input").value.trim();
-  if (h) lookup(h);
+  if (h) goLookup(h);
 });
 $("lk-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { const h = $("lk-input").value.trim(); if (h) lookup(h); }
+  if (e.key === "Enter") { const h = $("lk-input").value.trim(); if (h) goLookup(h); }
 });
 
 // ── boot ────────────────────────────────────────────────────────────────────
-const deepHandle = params.get("h");
-if (deepHandle) {
-  showView("lookup");
-  $("lk-input").value = deepHandle;
-  lookup(deepHandle);
-} else {
-  showView("console");
-}
+applyRoute();
 render();
