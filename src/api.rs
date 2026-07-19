@@ -37,6 +37,7 @@ pub fn router(pool: PgPool) -> Router {
         .route("/api/listings/mine", get(listings_mine))
         .route("/api/pair/start", post(pair_start))
         .route("/api/pair/complete", post(pair_complete))
+        .route("/api/agents/checkin", post(agent_checkin))
         .route("/api/handles/start", post(handles_start))
         .route("/api/handles/verify", post(handles_verify))
         .route("/api/handles/claim", post(handles_claim))
@@ -166,6 +167,37 @@ fn internal(e: sqlx::Error) -> (StatusCode, String) {
 }
 
 // ── the registrar: email-anchored handles ──────────────────────────────────
+
+/// The caller's public IP, spoof-resistant. X-Forwarded-For is scanned from
+/// the RIGHT (entries our infrastructure appended), skipping Google Front End
+/// ranges (130.211.0.0/22, 35.191.0.0/16) and private/loopback addresses;
+/// anything a client planted sits on the left and is never reached first.
+/// Falls back to the socket peer (local dev has no proxy).
+fn client_ip(headers: &HeaderMap, peer: Option<std::net::SocketAddr>) -> Option<String> {
+    fn is_infra(ip: &std::net::IpAddr) -> bool {
+        match ip {
+            std::net::IpAddr::V4(v4) => {
+                let o = v4.octets();
+                v4.is_private() || v4.is_loopback() || v4.is_link_local()
+                    || (o[0] == 130 && o[1] == 211 && o[2] < 4)
+                    || (o[0] == 35 && o[1] == 191)
+            }
+            std::net::IpAddr::V6(v6) => {
+                v6.is_loopback() || (v6.segments()[0] & 0xfe00) == 0xfc00
+            }
+        }
+    }
+    if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        for part in xff.split(',').rev() {
+            if let Ok(ip) = part.trim().parse::<std::net::IpAddr>() {
+                if !is_infra(&ip) {
+                    return Some(ip.to_string());
+                }
+            }
+        }
+    }
+    peer.map(|p| p.ip().to_string())
+}
 
 fn reg_err(e: RegistrarError) -> (StatusCode, Json<serde_json::Value>) {
     let (code, msg) = match &e {
@@ -332,7 +364,24 @@ async fn handles_mine(
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let email = session_from(&pool, &headers).await?;
     let handles = registrar::mine(&pool, &email).await.map_err(reg_err)?;
-    Ok(Json(serde_json::json!({ "ok": true, "email": email, "handles": handles })))
+    // Owner-only provenance: attach "last connected from" per bound handle.
+    // This never appears on the public card (resolve/build_card).
+    let ids: Vec<Uuid> = handles.iter().filter_map(|h| h.listing_id).collect();
+    let seen = registrar::last_seen_ips(&pool, &ids).await.map_err(reg_err)?;
+    let rows: Vec<serde_json::Value> = handles
+        .iter()
+        .map(|h| {
+            let mut v = serde_json::to_value(h).unwrap_or_default();
+            if let (Some(id), Some(obj)) = (h.listing_id, v.as_object_mut()) {
+                if let Some((ip, at)) = seen.get(&id) {
+                    obj.insert("last_seen_ip".into(), serde_json::json!(ip));
+                    obj.insert("last_seen_ip_at".into(), serde_json::json!(at));
+                }
+            }
+            v
+        })
+        .collect();
+    Ok(Json(serde_json::json!({ "ok": true, "email": email, "handles": rows })))
 }
 
 #[derive(Deserialize)]
@@ -362,12 +411,47 @@ struct PairCompleteBody {
 /// two proofs, and the binding is their intersection.
 async fn pair_complete(
     State(pool): State<PgPool>,
+    axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
+    headers: HeaderMap,
     Json(body): Json<PairCompleteBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let handle = registrar::pair_complete(&pool, &body.code, &body.agent_id, &body.signature)
         .await
         .map_err(reg_err)?;
+    // Owner-facing provenance: the pairing request comes from the agent's own
+    // machine, so its source IP is "last connected from".
+    if let Some(ip) = client_ip(&headers, Some(peer)) {
+        registrar::record_agent_ip(&pool, &body.agent_id, &ip).await.map_err(reg_err)?;
+    }
     Ok(Json(serde_json::json!({ "ok": true, "handle": handle })))
+}
+
+#[derive(Deserialize)]
+struct CheckinBody {
+    agent_id: String,
+    ts: i64,
+    signature: String,
+}
+
+/// Signed agent check-in (adapter start): refreshes "last connected from".
+/// The response echoes what was recorded so callers can self-verify.
+async fn agent_checkin(
+    State(pool): State<PgPool>,
+    axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
+    headers: HeaderMap,
+    Json(body): Json<CheckinBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let Some(ip) = client_ip(&headers, Some(peer)) else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "ok": false, "error": "could not determine caller address" })),
+        ));
+    };
+    registrar::checkin(&pool, &body.agent_id, body.ts, &body.signature, &ip)
+        .await
+        .map_err(reg_err)?;
+    log::info!("[catalog:registrar] check-in: {} from {ip}", body.agent_id);
+    Ok(Json(serde_json::json!({ "ok": true, "recorded_ip": ip })))
 }
 
 /// The PAN card (§5.1): the endpoints are the address. Presence is optional

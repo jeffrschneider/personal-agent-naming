@@ -389,3 +389,5 @@ a.brand { color: var(--paper); }
 .addbar td{padding:.85rem .6rem .55rem;border-bottom:none}
 .addbar .prev{font-size:.74rem;color:var(--faint);margin-top:.3rem;min-height:1.1em}
 .gate-panel{max-width:560px}
+.ip{font-size:.76rem;color:var(--address)}
+.ipcell{white-space:nowrap}

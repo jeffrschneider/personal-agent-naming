@@ -507,6 +507,60 @@ pub async fn resolve(pool: &PgPool, handle: &str) -> Result<Option<Handle>, Regi
     .await?)
 }
 
+/// Record where an agent last connected from (owner-facing provenance).
+pub async fn record_agent_ip(pool: &PgPool, agent_id: &str, ip: &str) -> Result<(), RegistrarError> {
+    sqlx::query(
+        "UPDATE listings SET last_seen_ip = $2, last_seen_ip_at = now() \
+         WHERE source IN ('agent','agentmesh') AND source_id = $1",
+    )
+    .bind(agent_id.trim())
+    .bind(ip)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Signed check-in (adapter start): proves key control, refreshes last-seen.
+/// Canonical string: `pan-checkin-v1:<unix_seconds>:<agent-id>`; the timestamp
+/// must be within a small window so a captured request cannot be replayed
+/// later to plant a stale IP.
+pub async fn checkin(
+    pool: &PgPool,
+    agent_id: &str,
+    ts: i64,
+    signature_b64: &str,
+    ip: &str,
+) -> Result<(), RegistrarError> {
+    use base64::Engine;
+    let now = Utc::now().timestamp();
+    if (now - ts).abs() > 300 {
+        return Err(RegistrarError::Invalid("check-in timestamp outside the accepted window".into()));
+    }
+    let sig = base64::engine::general_purpose::STANDARD
+        .decode(signature_b64.trim())
+        .map_err(|_| RegistrarError::Invalid("signature is not valid base64".into()))?;
+    let msg = format!("pan-checkin-v1:{ts}:{}", agent_id.trim());
+    let kp = agentmesh::KeyPair::from_public_key(agent_id.trim())
+        .map_err(|_| RegistrarError::Invalid("agent_id is not a valid public key".into()))?;
+    kp.verify(msg.as_bytes(), &sig)
+        .map_err(|_| RegistrarError::Invalid("signature does not verify against the agent key".into()))?;
+    record_agent_ip(pool, agent_id, ip).await
+}
+
+/// Owner-only: last-seen provenance for a set of listings.
+pub async fn last_seen_ips(
+    pool: &PgPool,
+    listing_ids: &[Uuid],
+) -> Result<std::collections::HashMap<Uuid, (Option<String>, Option<DateTime<Utc>>)>, RegistrarError> {
+    let rows: Vec<(Uuid, Option<String>, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT id, last_seen_ip, last_seen_ip_at FROM listings WHERE id = ANY($1)",
+    )
+    .bind(listing_ids)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(id, ip, at)| (id, (ip, at))).collect())
+}
+
 /// Reverse resolution (PAN v0.3): agent key -> its bound handle, if any.
 /// The key is public (it arrives on every signed envelope), so this maps a
 /// verified sender to a name without exposing anything a card does not.

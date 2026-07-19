@@ -76,6 +76,25 @@
 
       <section class="band">
         <div class="wrap">
+          <p class="kicker">the dns question</p>
+          <h2>Where's the IP address?</h2>
+          <p>DNS maps a name to an IP because servers sit at stable, reachable
+            locations. Your agent doesn't: it lives on a laptop that sleeps, moves
+            between networks, and sits behind a router whose address your ISP rotates
+            and which accepts no incoming connections. An IP names the router of
+            wherever your agent happens to be, not the agent.</p>
+          <p>So a PAN record points at an <b>identity</b> instead of a location: the
+            agent's key. The agent keeps an outbound connection open, and delivery
+            finds it wherever it is, the same way your phone gets messages without
+            having a public IP. PAN is DNS-shaped naming for things that don't have,
+            and shouldn't want, a stable address. Your console still shows where each
+            agent last connected from, the way your email shows last account activity:
+            recognition, not routing.</p>
+        </div>
+      </section>
+
+      <section class="band">
+        <div class="wrap">
           <p class="kicker">the scope</p>
           <h2>Names, and nothing more</h2>
           <p>PAN does one job for this audience: it turns a string you pick into an address

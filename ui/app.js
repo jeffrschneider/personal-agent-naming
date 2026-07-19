@@ -138,7 +138,7 @@ function renderRoster(handles) {
   lastRosterJson = JSON.stringify(handles.map((h) => [h.handle, !!h.listing_id]));
   const body = $("rows");
   if (!handles.length) {
-    body.innerHTML = `<tr><td colspan="4" class="empty-state">
+    body.innerHTML = `<tr><td colspan="5" class="empty-state">
       <p><b>No agent names yet.</b></p>
       <p class="muted">Pick a name below; its handle becomes
         <span class="mono">Name.${esc(session.email)}</span>, then connect it to the
@@ -157,13 +157,16 @@ function renderRoster(handles) {
       <td>${connected
         ? `<span class="st-ok" title="${esc(h.bind_method || "")}">✓ connected</span>`
         : `<span class="st-no">not connected yet</span>`}</td>
+      <td class="ipcell">${h.last_seen_ip
+        ? `<span class="ip mono" title="Your router's public IP as seen when this agent last talked to the registrar. It changes when your ISP rotates it. Only you can see this.">${esc(h.last_seen_ip)}</span> <span class="muted">· ${ago(h.last_seen_ip_at) || ""}</span>`
+        : `<span class="muted">${connected ? "not recorded yet" : "no connection yet"}</span>`}</td>
       <td class="ta-r row-actions">
         ${connected ? "" : `<button class="row-act primary conn" data-h="${esc(h.handle)}">connect</button>`}
         <button class="row-act rel" data-h="${esc(h.handle)}">release</button>
       </td>
     </tr>`;
     if (openConnect === h.handle) rows += `
-    <tr class="connect-row"><td colspan="4"><div class="pair-info" id="connect-panel">requesting a code…</div></td></tr>`;
+    <tr class="connect-row"><td colspan="5"><div class="pair-info" id="connect-panel">requesting a code…</div></td></tr>`;
     return rows;
   }).join("");
 
