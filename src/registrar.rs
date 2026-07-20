@@ -145,6 +145,18 @@ pub async fn verify_code(pool: &PgPool, email: &str, code: &str) -> Result<Uuid,
         return Err(RegistrarError::Invalid("wrong or expired code".into()));
     }
     sqlx::query("DELETE FROM email_codes WHERE email = $1").bind(&email).execute(pool).await?;
+    mint_session(pool, &email).await
+}
+
+/// Mint a session for an email WITHOUT a code check. For two uses: the tail of
+/// `verify_code` (after the code checks out), and delegated verification, where
+/// a trusted partner service that has itself verified the email (the mesh
+/// control plane, core §4.9 account session) obtains a PAN session so it can
+/// claim/bind a name on the user's behalf, sparing them a second email round
+/// trip. The caller is responsible for having verified the email; this function
+/// only issues the session.
+pub async fn mint_session(pool: &PgPool, email: &str) -> Result<Uuid, RegistrarError> {
+    let email = normalize_email(email)?;
     let (token,): (Uuid,) = sqlx::query_as(
         "INSERT INTO email_sessions (email, expires_at) VALUES ($1, now() + ($2 || ' minutes')::interval) RETURNING token",
     )

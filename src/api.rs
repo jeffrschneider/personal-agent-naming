@@ -40,6 +40,7 @@ pub fn router(pool: PgPool) -> Router {
         .route("/api/agents/checkin", post(agent_checkin))
         .route("/api/handles/start", post(handles_start))
         .route("/api/handles/verify", post(handles_verify))
+        .route("/api/handles/session-delegated", post(session_delegated))
         .route("/api/handles/claim", post(handles_claim))
         .route("/api/handles/bind", post(handles_bind))
         .route("/api/handles/release", post(handles_release))
@@ -296,6 +297,38 @@ async fn handles_verify(
     Json(body): Json<VerifyBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     let token = registrar::verify_code(&pool, &body.email, &body.code).await.map_err(reg_err)?;
+    Ok(Json(serde_json::json!({ "ok": true, "token": token })))
+}
+
+#[derive(Deserialize)]
+struct DelegatedBody {
+    email: String,
+}
+
+/// Delegated verification (trusted server-to-server): a partner service that
+/// has already verified the user's email — the AgentMesh control plane, whose
+/// account session proves the same email (core §4.9) — mints a PAN session
+/// without a second email round trip, then claims/binds a name on the user's
+/// behalf. Authorized by a shared secret in `X-Delegate-Secret`, NOT a user
+/// session. Disabled unless `PAN_DELEGATE_SECRET` is set. The name stays a
+/// normal PAN handle: portability and the direct two-service path are unchanged.
+async fn session_delegated(
+    State(pool): State<PgPool>,
+    headers: HeaderMap,
+    Json(body): Json<DelegatedBody>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let expected = std::env::var("PAN_DELEGATE_SECRET").ok().filter(|s| !s.is_empty()).ok_or_else(|| {
+        (StatusCode::NOT_IMPLEMENTED, Json(serde_json::json!({ "ok": false, "error": "delegation not configured" })))
+    })?;
+    let provided = headers.get("x-delegate-secret").and_then(|v| v.to_str().ok()).unwrap_or("");
+    // Constant-time comparison so a wrong secret leaks no length/timing signal.
+    let a = provided.as_bytes();
+    let b = expected.as_bytes();
+    let equal = a.len() == b.len() && a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0;
+    if !equal {
+        return Err((StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "ok": false, "error": "invalid delegate secret" }))));
+    }
+    let token = registrar::mint_session(&pool, &body.email).await.map_err(reg_err)?;
     Ok(Json(serde_json::json!({ "ok": true, "token": token })))
 }
 
