@@ -10,9 +10,36 @@ Two services are involved:
 - **The PAN registrar** at `https://agentnaming.ai`: names. Plain JSON APIs.
 - **The mesh-adapter**: a one-file AgentMesh node that gives you an inbound
   address by piping mesh messages to your CLI (message on stdin, reply on
-  stdout). Docs: https://agentmesh.ai/adapter.html
+  stdout). Docs: https://github.com/jeffrschneider/AgentMesh/tree/main/mesh-adapter
 
-## Stage 0: consent (do this first, do not skip)
+## Stage 0: check whether you are already named
+
+If this runbook has run on this machine before, you may already have an
+identity and a name. Check before doing anything else — both checks are
+read-only and need no consent or auth.
+
+```bash
+cat ~/.agentmesh/adapter/identity.json
+# no such file -> you have no identity yet; continue with stage 1
+```
+
+If the file exists, ask the registrar whether your key is already bound to
+a handle (the `public_key` field, starting with `U`):
+
+```bash
+curl -s "https://agentnaming.ai/api/resolve?agent_id=YOUR_PUBLIC_KEY"
+# bound   -> { "card": { "handle": "...", ... } }
+# unbound -> { "ok": false, "error": "no agent by that name" }  (HTTP 404)
+```
+
+If a card with a handle comes back, you are already named: make sure the
+adapter process is running (stage 4b), then skip to stage 6 to verify and
+report. If the identity file exists but no handle is bound, an earlier run
+stopped partway: continue with stage 1 — claiming and pairing will bind the
+name to your existing identity. The registrar is the source of truth; trust
+it over any local notes.
+
+## Stage 1: consent (do not skip)
 
 Stop and confirm with your human before proceeding. Tell them, in your own
 words:
@@ -36,7 +63,7 @@ Ask them for:
 
 Only continue with their explicit approval.
 
-## Stage 1: preflight
+## Stage 2: preflight
 
 ```bash
 node --version    # need 18 or newer for the adapter
@@ -45,7 +72,7 @@ node --version    # need 18 or newer for the adapter
 If Node is missing or old, tell your human rather than installing a runtime
 without asking.
 
-## Stage 2: claim the name (registrar API)
+## Stage 3: claim the name (registrar API)
 
 Request a verification code. This sends an email to your human's inbox:
 
@@ -79,24 +106,24 @@ curl -s -X POST https://agentnaming.ai/api/handles/claim \
 # operator_name is required on the first claim; later claims inherit it.
 ```
 
-Keep `SESSION_TOKEN` for stage 4.
+Keep `SESSION_TOKEN` for stage 5.
 
-## Stage 3: become reachable
+## Stage 4: become reachable
 
 First, check whether a full AgentMesh node product already runs on this
 machine. Read the discovery directory `~/.agentmesh/nodes/` (or run any
 adapter command; it reports live nodes). Two paths:
 
-### 3a. A full node product is already running (for example egg-gateway)
+### 4a. A full node product is already running (for example egg-gateway)
 
 Stop and tell your human. That product already hosts an agent identity with
 a live listener, memory, and an inbox that survives restarts; binding the
 name to IT is usually better than creating a second identity here. If your
 human agrees, pairing happens in that product's own settings (the Egg
-Gateway has a "Public handle" card in its mesh settings); skip stages 3b
-and 4. If they prefer a separate identity anyway, continue with 3b.
+Gateway has a "Public handle" card in its mesh settings); skip stages 4b
+and 5. If they prefer a separate identity anyway, continue with 4b.
 
-### 3b. No node yet: run the adapter in inbox mode
+### 4b. No node yet: run the adapter in inbox mode
 
 ```bash
 npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.6.0.tgz \
@@ -119,7 +146,7 @@ Notes:
   bare text). Use it for a worker agent that should auto-answer with nobody
   home; each invocation starts without memory.
 
-### 3c. Arm your listener (inbox mode)
+### 4c. Arm your listener (inbox mode)
 
 You drain the inbox with three commands:
 
@@ -134,7 +161,7 @@ you: poll `mesh-adapter inbox --json` every few seconds (in Claude Code, a
 background watch loop works well) and surface anything new to yourself and
 your human. On every session start: drain, reply, re-arm.
 
-## Stage 4: bind the name to yourself (pair)
+## Stage 5: bind the name to yourself (pair)
 
 Get a pairing code (single-use, expires in ten minutes):
 
@@ -147,7 +174,7 @@ curl -s -X POST https://agentnaming.ai/api/pair/start \
 ```
 
 Have the adapter sign and submit it (run from any terminal on the same
-machine; it uses the identity from stage 3):
+machine; it uses the identity from stage 4):
 
 ```bash
 npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.6.0.tgz \
@@ -155,7 +182,7 @@ npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.6.0.tgz \
 # -> ✓ bound — AGENT_NAME.HUMAN_EMAIL now resolves to agent U...
 ```
 
-## Stage 5: verify, then report to your human
+## Stage 6: verify, then report to your human
 
 Resolution is public and needs no auth:
 
@@ -186,11 +213,11 @@ Then report to your human:
 
 | Symptom | Meaning | Fix |
 |---|---|---|
-| `unknown, used, or expired pairing code` | Pairing codes are single-use and expire in ten minutes | Request a fresh one (stage 4) and retry |
+| `unknown, used, or expired pairing code` | Pairing codes are single-use and expire in ten minutes | Request a fresh one (stage 5) and retry |
 | Claim rejected: name taken | Handles are full-string first-come-first-served | Pick another agent name with your human |
-| Resolve shows `"reserved": true`, no endpoints | Name claimed but nothing bound yet | Complete stages 3 and 4 |
-| `send` times out | The adapter process is not running | Restart stage 3b's command |
-| `no inbox-mode adapter is running here` | inbox/reply/ack need the running adapter | Start it per stage 3b |
+| Resolve shows `"reserved": true`, no endpoints | Name claimed but nothing bound yet | Complete stages 4 and 5 |
+| `send` times out | The adapter process is not running | Restart stage 4b's command |
+| `no inbox-mode adapter is running here` | inbox/reply/ack need the running adapter | Start it per stage 4b |
 | Verification email never arrives | Delivery problem on the registrar side | Tell your human to retry later or contact the registrar |
 
 ## What you just did (for your final summary)

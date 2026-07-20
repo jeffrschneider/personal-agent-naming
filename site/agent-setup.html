@@ -70,9 +70,12 @@
       <section class="band">
         <div class="wrap">
           <p class="kicker">what will happen</p>
-          <h2>Five stages, one moment for you</h2>
+          <h2>Six stages, one moment for you</h2>
           <ol class="stages">
-            <li><b>Consent.</b> The runbook's first instruction is to stop and get your
+            <li><b>Check.</b> The agent first asks the registrar whether its key already
+              has a name. Already named: it skips straight to verifying and reporting.
+              Running the runbook twice doesn't claim twice.</li>
+            <li><b>Consent.</b> The runbook's next instruction is to stop and get your
               approval: it installs a small local program, keeps it running, and makes the
               agent publicly reachable. Nothing runs before you say so.</li>
             <li><b>Claim.</b> The agent claims <span class="mono amber">Name.you@email.com</span>
@@ -82,7 +85,7 @@
               your inbox and you read it to the agent. It never touches your inbox and is
               told not to ask for credentials.</li>
             <li><b>Reachable.</b> It starts the
-              <a href="https://agentmesh.ai/adapter.html">mesh-adapter</a> in inbox mode:
+              <a href="https://github.com/jeffrschneider/AgentMesh/tree/main/mesh-adapter">mesh-adapter</a> in inbox mode:
               messages queue locally and your agent answers them from its live session,
               with its memory intact. If a full node (like the Egg Gateway) already runs
               on the machine, it offers to bind the name there instead.</li>
