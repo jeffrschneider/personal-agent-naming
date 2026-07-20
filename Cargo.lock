@@ -9,6 +9,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aead"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d122413f284cf2d62fb1b7db97e02edb8cda96d769b16e443a4f6195e35662b0"
+dependencies = [
+ "crypto-common 0.1.7",
+ "generic-array",
+]
+
+[[package]]
 name = "agent-catalog"
 version = "0.1.0"
 dependencies = [
@@ -32,16 +42,19 @@ dependencies = [
 
 [[package]]
 name = "agentmesh"
-version = "0.2.0"
+version = "0.4.0"
 dependencies = [
  "async-nats",
  "base64",
  "chrono",
+ "crypto_box",
+ "crypto_secretbox",
  "futures",
  "nkeys",
  "rand 0.8.7",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
  "tokio",
  "uuid",
@@ -129,9 +142,9 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "async-nats"
-version = "0.38.0"
+version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "76433c4de73442daedb3a59e991d94e85c14ebfc33db53dfcd347a21cd6ef4f8"
+checksum = "08f6da6d49a956424ca4e28fe93656f790d748b469eaccbc7488fec545315180"
 dependencies = [
  "base64",
  "bytes",
@@ -394,6 +407,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cipher"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
+dependencies = [
+ "crypto-common 0.1.7",
+ "inout",
+ "zeroize",
+]
+
+[[package]]
 name = "cmake"
 version = "0.1.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -529,6 +553,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
  "generic-array",
+ "rand_core 0.6.4",
  "typenum",
 ]
 
@@ -539,6 +564,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
 dependencies = [
  "hybrid-array",
+]
+
+[[package]]
+name = "crypto_box"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16182b4f39a82ec8a6851155cc4c0cda3065bb1db33651726a29e1951de0f009"
+dependencies = [
+ "aead",
+ "crypto_secretbox",
+ "curve25519-dalek",
+ "salsa20",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "crypto_secretbox"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9d6cf87adf719ddf43a805e92c6870a531aedda35ff640442cbaf8674e141e1"
+dependencies = [
+ "aead",
+ "cipher",
+ "generic-array",
+ "poly1305",
+ "salsa20",
+ "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -563,6 +617,7 @@ dependencies = [
  "fiat-crypto",
  "rustc_version",
  "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -966,6 +1021,7 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+ "zeroize",
 ]
 
 [[package]]
@@ -1350,6 +1406,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "inout"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
+dependencies = [
+ "generic-array",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1630,6 +1695,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "opaque-debug"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
+
+[[package]]
 name = "openssl"
 version = "0.10.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1769,6 +1840,17 @@ name = "pkg-config"
 version = "0.3.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e"
+
+[[package]]
+name = "poly1305"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8159bd90725d2df49889a078b54f4f79e87f1f8a8444194cdca81d38f5393abf"
+dependencies = [
+ "cpufeatures 0.2.17",
+ "opaque-debug",
+ "universal-hash",
+]
 
 [[package]]
 name = "portable-atomic"
@@ -2330,7 +2412,6 @@ version = "0.102.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64ca1bc8749bd4cf37b5ce386cc146580777b4e8572c7b97baf22c83f444bee9"
 dependencies = [
- "ring",
  "rustls-pki-types",
  "untrusted",
 ]
@@ -2358,6 +2439,15 @@ name = "ryu"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
+
+[[package]]
+name = "salsa20"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97a22f5af31f73a954c10289c93e8a50cc23d971e80ee446f1f6f7137a088213"
+dependencies = [
+ "cipher",
+]
 
 [[package]]
 name = "same-file"
@@ -2681,7 +2771,7 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
- "webpki-roots",
+ "webpki-roots 1.0.8",
 ]
 
 [[package]]
@@ -3079,11 +3169,11 @@ dependencies = [
  "httparse",
  "rand 0.8.7",
  "ring",
- "rustls-native-certs 0.8.4",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
  "tokio-util",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -3235,6 +3325,16 @@ name = "unicode-properties"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7df058c713841ad818f1dc5d3fd88063241cc61f49f5fbea4b951e8cf5a8d71d"
+
+[[package]]
+name = "universal-hash"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea"
+dependencies = [
+ "crypto-common 0.1.7",
+ "subtle",
+]
 
 [[package]]
 name = "untrusted"
@@ -3433,6 +3533,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31141ce3fc3e300ae89b78c0dd67f9708061d1d2eda54b8209346fd6be9a92c"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.8",
 ]
 
 [[package]]
