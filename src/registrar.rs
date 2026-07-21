@@ -199,9 +199,11 @@ pub async fn session_info(pool: &PgPool, token: Uuid) -> Result<(String, String)
     row.ok_or(RegistrarError::Unauthorized)
 }
 
-/// Canonical JSON for hashing: compact, keys recursively sorted. Explicit
-/// so the chain never depends on serde_json's map-ordering configuration.
-fn canonical_json(v: &serde_json::Value) -> String {
+/// Canonical JSON for hashing and card signatures: compact, keys recursively
+/// sorted. Explicit so neither the log chain nor a card signature ever
+/// depends on serde_json's map-ordering configuration. Byte-compatible with
+/// the AgentMesh SDK's canonicalJSON.
+pub fn canonical_json(v: &serde_json::Value) -> String {
     match v {
         serde_json::Value::Object(map) => {
             let mut keys: Vec<&String> = map.keys().collect();

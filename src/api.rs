@@ -32,6 +32,7 @@ pub fn router(pool: PgPool) -> Router {
         .route("/api/listings", post(submit))
         .route("/api/listings/:id", get(get_one))
         .route("/api/resolve", get(resolve_handle))
+        .route("/api/registrar-key", get(registrar_key))
         .route("/api/operator", get(operator_get).post(operator_set))
         .route("/.well-known/webfinger", get(webfinger))
         .route("/api/listings/mine", get(listings_mine))
@@ -633,6 +634,16 @@ async fn resolve_handle(
                 None => None,
             };
             let operator = registrar::operator_get(&pool, &h.email).await.map_err(reg_err)?;
+            let sign_card = |card: &serde_json::Value| -> Option<(String, String)> {
+                // Signed cards (PAN §5.3): Ed25519 over the canonical card, so
+                // caches and relays cannot tamper. Soft-rolled: absent seed,
+                // cards go out unsigned exactly as before.
+                let seed = std::env::var("PAN_CARD_SEED").ok()?;
+                let kp = agentmesh::KeyPair::from_seed(&seed).ok()?;
+                let sig = kp.sign(registrar::canonical_json(card).as_bytes()).ok()?;
+                use base64::Engine as _;
+                Some((kp.public_key(), base64::engine::general_purpose::STANDARD.encode(sig)))
+            };
             let decl = match h.listing_id {
                 Some(id) => registrar::last_seen_ips(&pool, &[id])
                     .await
@@ -644,9 +655,35 @@ async fn resolve_handle(
                 "ok": true,
                 "card": build_card(&h, listing.as_ref(), operator.as_deref(), decl.as_ref()),
                 "listing": listing,
-            })))
+            }).tap_sign(sign_card)))
         }
     }
+}
+
+/// Attach `registrar_key`/`registrar_sig` beside the card when signing is
+/// configured. A tiny extension trait keeps the resolve handler readable.
+trait TapSign {
+    fn tap_sign(self, f: impl Fn(&serde_json::Value) -> Option<(String, String)>) -> Self;
+}
+impl TapSign for serde_json::Value {
+    fn tap_sign(mut self, f: impl Fn(&serde_json::Value) -> Option<(String, String)>) -> Self {
+        let signed = self.get("card").and_then(|c| f(c));
+        if let (Some((key, sig)), Some(obj)) = (signed, self.as_object_mut()) {
+            obj.insert("registrar_key".into(), serde_json::json!(key));
+            obj.insert("registrar_sig".into(), serde_json::json!(sig));
+        }
+        self
+    }
+}
+
+/// GET /api/registrar-key — the key(s) cards are signed with, for verifiers
+/// that want an out-of-band copy rather than trusting the resolve response.
+async fn registrar_key() -> Json<serde_json::Value> {
+    let key = std::env::var("PAN_CARD_SEED")
+        .ok()
+        .and_then(|s| agentmesh::KeyPair::from_seed(&s).ok())
+        .map(|kp| kp.public_key());
+    Json(serde_json::json!({ "ok": true, "keys": key.into_iter().collect::<Vec<_>>() }))
 }
 
 #[derive(Deserialize)]

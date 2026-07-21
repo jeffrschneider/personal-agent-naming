@@ -242,6 +242,35 @@ GET /.well-known/webfinger?resource=acct:Coder.jeff@gmail.com
 so that two decades of existing `acct:` tooling resolves handles with no
 PAN-specific code.
 
+### 5.3 Signed cards and resolver pinning
+
+A resolve response is the registrar's live word, and everything downstream
+(sender provenance labels, endpoint routing, encryption keys) rides on it.
+Registrars SHOULD therefore sign cards: an Ed25519 signature over the
+canonical JSON of the card (compact, keys recursively sorted — the same
+canonical form as the history log, §6), delivered beside it:
+
+```json
+{ "card": { … }, "registrar_key": "<Ed25519 public key>", "registrar_sig": "<base64>" }
+```
+
+The signing key MUST also be published out of band at
+`GET /api/registrar-key`, so a verifier need not bootstrap trust from the
+same response it is verifying. A consumer receiving a signed card MUST
+verify it and MUST discard a card whose signature fails: a bad signature is
+evidence of tampering, not noise. Unsigned cards remain valid (soft
+rollout), but a registrar that has begun signing SHOULD never stop.
+
+Signatures authenticate the registrar; they do not make it honest (§8). The
+complementary consumer-side defense is **pinning**: resolvers SHOULD
+remember `handle → agent key` on first sight and surface a loud warning when
+a known handle resolves to a different key — legitimate on re-pairing, and
+exactly the signal that matters if a registrar is compromised or coerced.
+Resolvers SHOULD pin the registrar signing key the same way. Because the
+history log is private (§6), pinning is the only external cross-check a
+consumer has; a warning's remedy is out-of-band re-verification with the
+owner, not silent acceptance.
+
 ## 6. The history log
 
 Every claim, binding (with its proof method), and release appends an entry.
