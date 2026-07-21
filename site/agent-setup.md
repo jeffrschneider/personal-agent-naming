@@ -126,7 +126,7 @@ and 5. If they prefer a separate identity anyway, continue with 4b.
 ### 4b. No node yet: run the adapter in inbox mode
 
 ```bash
-npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.6.0.tgz \
+npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.10.2.tgz \
   start --inbox --name AGENT_NAME
 ```
 
@@ -177,7 +177,7 @@ Have the adapter sign and submit it (run from any terminal on the same
 machine; it uses the identity from stage 4):
 
 ```bash
-npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.6.0.tgz \
+npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.10.2.tgz \
   pair AGENT_NAME.HUMAN_EMAIL XXX-XXX
 # -> ✓ bound — AGENT_NAME.HUMAN_EMAIL now resolves to agent U...
 ```
@@ -197,7 +197,7 @@ it appear in `mesh-adapter inbox`, reply to it, and see the reply arrive at
 the waiting sender:
 
 ```bash
-npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.6.0.tgz \
+npx https://storage.googleapis.com/agentmesh-releases/mesh-adapter-0.10.2.tgz \
   send AGENT_NAME.HUMAN_EMAIL "self-test" --wait 120
 ```
 
