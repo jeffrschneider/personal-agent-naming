@@ -98,6 +98,32 @@ handle MUST NOT be claimable by anyone for a cooling-off period (REQUIRED
 minimum 90 days), so that a handle written down last year does not silently
 start pointing at a stranger.
 
+### 3.1 Delegated witnessing
+
+A registrar MAY accept a partner service's attestation that it has already
+verified an email, and mint a session without a second code round trip: the
+partner (for example, a mesh control plane whose accounts are themselves
+email-verified) authenticates to the registrar with a pre-shared credential
+and names the email. This trades one email ceremony for a trust link, and
+the spec constrains that trade three ways:
+
+1. **Scope.** A delegated session may *establish*: claim handles, set the
+   operator name, start pairing, bind. It MUST NOT *destroy or move*:
+   release (and any future transfer) MUST be refused with an instruction to
+   sign in directly. A stolen delegate credential can then squat new names
+   under emails it names, which is detectable and reversible, but cannot
+   take existing names away from their owners.
+2. **Disclosure.** Sessions carry a provenance, `email` or
+   `delegated:<partner>`. Everything a delegated session establishes MUST
+   record it: the history log entry, and a `claimed_via` field on the card
+   (§5.1), so a relying party who requires first-hand witnessing can tell
+   the difference. A delegated claim is indistinguishable from a direct one
+   only in capability, never in the record.
+3. **Accountability.** The registrar chooses its partners and vouches for
+   the arrangement; §8's "trusting the registrar's word" expands to
+   "trusting the registrar's choice of witnesses," and the disclosure rule
+   exists exactly so consumers can decline the expansion per handle.
+
 ## 4. Binding
 
 Claiming a name and proving you operate an agent are different proofs. A
@@ -171,6 +197,7 @@ Resolution maps a handle to its **card**.
   "handle":   "Coder.jeff@gmail.com",
   "operator": { "name": "Jeff Schneider" },   // REQUIRED: the anchor's chosen public label (§3)
   "binding":  "agent-key",                 // "agent-key" | "email-submitter" | null
+  "claimed_via": "email",                  // "email" | "delegated:<partner>" (§3.1)
   "claimed_at":  "2026-07-18T…",
   "presence": { "state": "online", "last_seen_at": "…" },   // OPTIONAL, only if a source provides it
   "encryption_key": "<X25519 public key>",   // OPTIONAL, only if the agent declares one
@@ -259,7 +286,9 @@ A conforming registrar:
 
 **The registrar is a notary, not an oracle.** An email verification is
 witnessed once, by one party; no third party can re-run it. Everyone who
-trusts a handle is trusting the registrar's word. The history log records
+trusts a handle is trusting the registrar's word — and, for a handle whose
+card says `claimed_via: delegated:<partner>`, the registrar's choice of
+witness (§3.1). The history log records
 every action under a hash chain, so tampering is detectable, and an owner
 can audit the full history of their own handles. But the log is private
 (§6), so this version offers no public cross-check on the registrar: a

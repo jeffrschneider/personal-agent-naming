@@ -54,11 +54,14 @@ pub struct Handle {
     pub stale: bool,
     pub created_at: DateTime<Utc>,
     pub released_at: Option<DateTime<Utc>>,
+    /// How the claim was witnessed: 'email' (direct verification) or
+    /// 'delegated:<partner>' (a trusted partner attested it). On the card.
+    pub claimed_via: String,
 }
 
 macro_rules! handle_cols {
     () => {
-        "handle, email, listing_id, anchor, bind_method, verified_at, stale, created_at, released_at"
+        "handle, email, listing_id, anchor, bind_method, verified_at, stale, created_at, released_at, claimed_via"
     };
 }
 
@@ -148,19 +151,32 @@ pub async fn verify_code(pool: &PgPool, email: &str, code: &str) -> Result<Uuid,
     mint_session(pool, &email).await
 }
 
-/// Mint a session for an email WITHOUT a code check. For two uses: the tail of
-/// `verify_code` (after the code checks out), and delegated verification, where
-/// a trusted partner service that has itself verified the email (the mesh
-/// control plane, core §4.9 account session) obtains a PAN session so it can
-/// claim/bind a name on the user's behalf, sparing them a second email round
-/// trip. The caller is responsible for having verified the email; this function
-/// only issues the session.
+/// Mint a directly-verified session (provenance 'email'): the tail of
+/// `verify_code`, after the code checks out.
 pub async fn mint_session(pool: &PgPool, email: &str) -> Result<Uuid, RegistrarError> {
+    mint_session_as(pool, email, "email").await
+}
+
+/// Mint a session with explicit provenance. The second use is delegated
+/// witnessing: a trusted partner service that has itself verified the email
+/// (the mesh control plane, core §4.9 account session) obtains a PAN session
+/// so it can claim/bind a name on the user's behalf, sparing them a second
+/// email round trip. Provenance is recorded on the session, disclosed on
+/// everything the session establishes, and a delegated session can establish
+/// (claim, pair, bind) but never destroy (release) — the API layer enforces
+/// that scope.
+pub async fn mint_session_as(
+    pool: &PgPool,
+    email: &str,
+    provenance: &str,
+) -> Result<Uuid, RegistrarError> {
     let email = normalize_email(email)?;
     let (token,): (Uuid,) = sqlx::query_as(
-        "INSERT INTO email_sessions (email, expires_at) VALUES ($1, now() + ($2 || ' minutes')::interval) RETURNING token",
+        "INSERT INTO email_sessions (email, provenance, expires_at) \
+         VALUES ($1, $2, now() + ($3 || ' minutes')::interval) RETURNING token",
     )
     .bind(&email)
+    .bind(provenance)
     .bind(SESSION_TTL_MIN.to_string())
     .fetch_one(pool)
     .await?;
@@ -169,12 +185,18 @@ pub async fn mint_session(pool: &PgPool, email: &str) -> Result<Uuid, RegistrarE
 
 /// The email a live session belongs to.
 pub async fn session_email(pool: &PgPool, token: Uuid) -> Result<String, RegistrarError> {
-    let row: Option<(String,)> =
-        sqlx::query_as("SELECT email FROM email_sessions WHERE token = $1 AND expires_at > now()")
-            .bind(token)
-            .fetch_optional(pool)
-            .await?;
-    row.map(|(e,)| e).ok_or(RegistrarError::Unauthorized)
+    session_info(pool, token).await.map(|(email, _)| email)
+}
+
+/// The email AND provenance of a live session ('email' or 'delegated:<partner>').
+pub async fn session_info(pool: &PgPool, token: Uuid) -> Result<(String, String), RegistrarError> {
+    let row: Option<(String, String)> = sqlx::query_as(
+        "SELECT email, provenance FROM email_sessions WHERE token = $1 AND expires_at > now()",
+    )
+    .bind(token)
+    .fetch_optional(pool)
+    .await?;
+    row.ok_or(RegistrarError::Unauthorized)
 }
 
 /// Canonical JSON for hashing: compact, keys recursively sorted. Explicit
@@ -286,6 +308,7 @@ pub async fn claim(
     email: &str,
     name: &str,
     listing_id: Option<Uuid>,
+    via: &str,
 ) -> Result<String, RegistrarError> {
     let name = validate_name(name)?;
     if let Some(id) = listing_id {
@@ -308,13 +331,14 @@ pub async fn claim(
     }
 
     let inserted = sqlx::query(
-        "INSERT INTO handles (handle, handle_key, email, listing_id, bind_method) \
-         VALUES ($1, $2, $3, $4, CASE WHEN $4::uuid IS NULL THEN NULL ELSE 'email-submitter' END)",
+        "INSERT INTO handles (handle, handle_key, email, listing_id, bind_method, claimed_via) \
+         VALUES ($1, $2, $3, $4, CASE WHEN $4::uuid IS NULL THEN NULL ELSE 'email-submitter' END, $5)",
     )
     .bind(&handle)
     .bind(&key)
     .bind(email)
     .bind(listing_id)
+    .bind(via)
     .execute(pool)
     .await;
     match inserted {
@@ -325,7 +349,7 @@ pub async fn claim(
         Err(e) => return Err(e.into()),
     }
 
-    log_action(pool, "claimed", &handle, email, serde_json::json!({ "listing_id": listing_id }))
+    log_action(pool, "claimed", &handle, email, serde_json::json!({ "listing_id": listing_id, "via": via }))
         .await?;
     log::info!("[catalog:registrar] claimed: {handle} (bound: {})", listing_id.is_some());
     Ok(handle)

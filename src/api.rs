@@ -234,6 +234,21 @@ async fn session_from(
     registrar::session_email(pool, token).await.map_err(reg_err)
 }
 
+/// Like `session_from`, but also returns the session's provenance
+/// ('email' or 'delegated:<partner>'), for scope-gated endpoints.
+async fn session_info_from(
+    pool: &PgPool,
+    headers: &HeaderMap,
+) -> Result<(String, String), (StatusCode, Json<serde_json::Value>)> {
+    let token = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|v| Uuid::parse_str(v.trim()).ok())
+        .ok_or_else(|| reg_err(RegistrarError::Unauthorized))?;
+    registrar::session_info(pool, token).await.map_err(reg_err)
+}
+
 /// Deliver a verification code. With RESEND_API_KEY set, sends via Resend
 /// (from RESEND_FROM, default onboarding@resend.dev); otherwise dev mode
 /// logs it to the server console. The response says which delivery happened.
@@ -328,7 +343,12 @@ async fn session_delegated(
     if !equal {
         return Err((StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "ok": false, "error": "invalid delegate secret" }))));
     }
-    let token = registrar::mint_session(&pool, &body.email).await.map_err(reg_err)?;
+    let partner =
+        std::env::var("PAN_DELEGATE_PARTNER").unwrap_or_else(|_| "partner".to_string());
+    let token =
+        registrar::mint_session_as(&pool, &body.email, &format!("delegated:{partner}"))
+            .await
+            .map_err(reg_err)?;
     Ok(Json(serde_json::json!({ "ok": true, "token": token })))
 }
 
@@ -348,7 +368,7 @@ async fn handles_claim(
     headers: HeaderMap,
     Json(body): Json<ClaimBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let email = session_from(&pool, &headers).await?;
+    let (email, provenance) = session_info_from(&pool, &headers).await?;
     if let Some(ref n) = body.operator_name {
         registrar::operator_set(&pool, &email, n).await.map_err(reg_err)?;
     } else if registrar::operator_get(&pool, &email).await.map_err(reg_err)?.is_none() {
@@ -360,8 +380,9 @@ async fn handles_claim(
             })),
         ));
     }
-    let handle =
-        registrar::claim(&pool, &email, &body.name, body.listing_id).await.map_err(reg_err)?;
+    let handle = registrar::claim(&pool, &email, &body.name, body.listing_id, &provenance)
+        .await
+        .map_err(reg_err)?;
     Ok(Json(serde_json::json!({ "ok": true, "handle": handle })))
 }
 
@@ -392,7 +413,17 @@ async fn handles_release(
     headers: HeaderMap,
     Json(body): Json<ReleaseBody>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
-    let email = session_from(&pool, &headers).await?;
+    let (email, provenance) = session_info_from(&pool, &headers).await?;
+    // Delegated sessions establish; only a directly verified owner destroys.
+    if provenance != "email" {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({
+                "ok": false,
+                "error": "a delegated session cannot release a handle; sign in directly at the registrar to release"
+            })),
+        ));
+    }
     registrar::release(&pool, &email, &body.handle).await.map_err(reg_err)?;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
@@ -555,6 +586,10 @@ fn build_card(
         "agent": agent,
         "encryption_key": encryption_key,
         "binding": h.bind_method,
+        // How the claim was witnessed: 'email' (registrar saw the inbox
+        // directly) or 'delegated:<partner>' (a partner attested it). A
+        // relying party who requires first-hand witnessing can check this.
+        "claimed_via": h.claimed_via,
         "claimed_at": h.created_at,
         "reserved": listing.is_none(),
         "presence": presence,
